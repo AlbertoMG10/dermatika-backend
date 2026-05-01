@@ -1,0 +1,21 @@
+{
+  "name": "dermatika-backend",
+  "version": "1.0.0",
+  "description": "Backend seguro para DERMATIKA: intake, tracking, correo y CSV.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "@fast-csv/format": "^5.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.0.0",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.9.16",
+    "xss": "^1.0.15"
+  }
+}
