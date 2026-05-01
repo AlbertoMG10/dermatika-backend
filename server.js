@@ -8,15 +8,12 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 const allowedOrigins = [
-  "https://dermatika.netlify.app",
   "https://dermatika.mx",
   "https://www.dermatika.mx",
-  "https://dermatika.com.mx",
-  "https://www.dermatika.com.mx",
+  "https://dermatika.netlify.app",
   "http://localhost:3000",
   "http://localhost:5173"
 ];
-
 app.use(helmet({ contentSecurityPolicy: false }));
 
 app.use(cors({
