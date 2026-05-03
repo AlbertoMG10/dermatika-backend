@@ -262,9 +262,7 @@ app.post("/api/create-stripe-payment-intent", asyncHandler(async (req, res) => {
   });
 }));
 
-app.get("*", (req, res) => {
-  res.sendFile(path.join(projectRoot, "index.html"));
-});
+
 
 app.use((error, _req, res, _next) => {
   console.error("[DERMATIKA backend error]", error);
