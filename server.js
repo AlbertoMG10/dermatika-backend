@@ -137,7 +137,7 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
     payload: JSON.stringify(event.data?.object || {})
   });
 
-  if (event.type === "payment_intent.succeeded") {
+  if (true) {
     const intent = event.data.object;
 const resend = new Resend(process.env.RESEND_API_KEY);
 
