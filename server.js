@@ -30,8 +30,8 @@ app.get("/api/config", (req, res) => {
 const port = Number(process.env.PORT || 3000);
 const isProduction = process.env.NODE_ENV === "production";
 const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:3000";
-const adminEmail = process.env.RESEND_TO_EMAIL || process.env.ADMIN_EMAIL;
-const resendFrom = process.env.RESEND_FROM || "onboarding@resend.dev";
+const adminEmail = process.env.RESEND_TO_EMAIL || process.env.ADMIN_EMAIL || "mgdermalab@gmail.com";
+const resendFrom = process.env.RESEND_FROM || "DERMATIKA <contacto@dermatika.mx>";
 
 const plans = {
   esencial: { name: "Nova Esencial", price: 1390 },
@@ -158,7 +158,7 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
 
         await resend.emails.send({
           from: resendFrom,
-          to: adminEmail,
+          to: [adminEmail],
           subject: "Nuevo pago recibido 💰",
           html: `<p>Pago exitoso de $${(intent.amount_received || intent.amount) / 100} ${intent.currency}</p>`
         });
@@ -263,7 +263,7 @@ app.post("/api/intake", upload.fields([
     try {
       await resend.emails.send({
         from: resendFrom,
-        to: adminEmail,
+        to: [adminEmail],
         subject: "Nuevo paciente DERMATIKA",
         html: `
           <h2>Nuevo paciente</h2>
