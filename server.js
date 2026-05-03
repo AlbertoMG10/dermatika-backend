@@ -30,6 +30,8 @@ app.get("/api/config", (req, res) => {
 const port = Number(process.env.PORT || 3000);
 const isProduction = process.env.NODE_ENV === "production";
 const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:3000";
+const adminEmail = process.env.RESEND_TO_EMAIL || process.env.ADMIN_EMAIL;
+const resendFrom = process.env.RESEND_FROM || "onboarding@resend.dev";
 
 const plans = {
   esencial: { name: "Nova Esencial", price: 1390 },
@@ -150,13 +152,13 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
       currency: intent.currency
     });
 
-    if (process.env.RESEND_API_KEY && process.env.ADMIN_EMAIL) {
+    if (process.env.RESEND_API_KEY && adminEmail) {
       try {
         console.log("INTENT DETECTADO:", intent.id);
 
         await resend.emails.send({
-          from: process.env.RESEND_FROM || "Dermatika <onboarding@resend.dev>",
-          to: process.env.ADMIN_EMAIL,
+          from: resendFrom,
+          to: adminEmail,
           subject: "Nuevo pago recibido 💰",
           html: `<p>Pago exitoso de $${(intent.amount_received || intent.amount) / 100} ${intent.currency}</p>`
         });
@@ -166,7 +168,7 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
         console.log("ERROR EMAIL:", error);
       }
     } else {
-      console.warn("[DERMATIKA payment mail skipped] Missing RESEND_API_KEY or ADMIN_EMAIL");
+      console.warn("[DERMATIKA payment mail skipped] Missing RESEND_API_KEY or RESEND_TO_EMAIL/ADMIN_EMAIL");
     }
   }
 
@@ -227,11 +229,11 @@ app.post("/api/intake", upload.fields([
     encrypted_payload: encryptPayload({ ...fields, files })
   });
 
-  if (process.env.RESEND_API_KEY && process.env.ADMIN_EMAIL) {
+  if (process.env.RESEND_API_KEY && adminEmail) {
     try {
       await resend.emails.send({
-        from: process.env.RESEND_FROM || "Dermatika <onboarding@resend.dev>",
-        to: process.env.ADMIN_EMAIL,
+        from: resendFrom,
+        to: adminEmail,
         subject: "Nuevo paciente DERMATIKA",
         html: `
           <h2>Nuevo paciente</h2>
@@ -248,7 +250,7 @@ app.post("/api/intake", upload.fields([
       console.error("[DERMATIKA resend error]", error);
     }
   } else {
-    console.warn("[DERMATIKA mail skipped] Missing RESEND_API_KEY or ADMIN_EMAIL");
+    console.warn("[DERMATIKA mail skipped] Missing RESEND_API_KEY or RESEND_TO_EMAIL/ADMIN_EMAIL");
   }
 
   res.json({ ok: true, patientReference: reference, files });
