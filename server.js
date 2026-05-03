@@ -115,7 +115,7 @@ function asyncHandler(handler) {
 
 app.set("trust proxy", 1);
 
-app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), (req, res) => {
+app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
   const stripe = getStripe();
   const signature = req.headers["stripe-signature"];
   if (!process.env.STRIPE_WEBHOOK_SECRET) {
