@@ -193,6 +193,18 @@ app.post("/api/intake", upload.fields([
   { name: "photoRight", maxCount: 1 }
 ]), asyncHandler(async (req, res) => {
   const fields = normalizeFields(req.body);
+  await transporter.sendMail({
+  from: "Dermatika <onboarding@resend.dev>",
+  to: process.env.ADMIN_EMAIL,
+  subject: "Nuevo paciente DERMATIKA",
+  html: `
+    <h2>Nuevo paciente</h2>
+    <p><b>Nombre:</b> ${fields.name || ""}</p>
+    <p><b>Email:</b> ${fields.email || ""}</p>
+    <p><b>Teléfono:</b> ${fields.phone || ""}</p>
+    <p><b>Plan:</b> ${fields.plan_key || ""}</p>
+  `
+});
   const plan = getPlan(fields.plan_key);
   if (!plan) return res.status(400).json({ error: "invalid_plan" });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email || "")) return res.status(400).json({ error: "invalid_email" });
