@@ -139,17 +139,25 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), (req,
 
   if (event.type === "payment_intent.succeeded") {
     const intent = event.data.object;
-    appendCsv("payments.csv", ["created_at", "provider", "payment_id", "status", "patient_reference", "amount", "currency"], {
-      created_at: new Date().toISOString(),
-      provider: "stripe",
-      payment_id: intent.id,
-      status: intent.status,
-      patient_reference: intent.metadata?.patient_reference || "",
-      amount: intent.amount_received || intent.amount,
-      currency: intent.currency
-    });
-  }
+const resend = new Resend(process.env.RESEND_API_KEY);
 
+  await resend.emails.send({
+    from: "onboarding@resend.dev",
+    to: "tuemailreal@gmail.com",
+    subject: "Nuevo pago recibido 💰",
+    html: `<p>Pago exitoso de ${intent.amount / 100} ${intent.currency}</p>`
+  });
+
+  appendCsv("payments.csv", ["created_at", "provider", "payment_id", "status", "patient_reference", "amount", "currency"], {
+    created_at: new Date().toISOString(),
+    provider: "stripe",
+    payment_id: intent.id,
+    status: intent.status,
+    patient_reference: intent.metadata?.patient_reference || "",
+    amount: intent.amount_received || intent.amount,
+    currency: intent.currency
+  });
+}
   res.json({ received: true });
 });
 
