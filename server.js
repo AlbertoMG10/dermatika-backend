@@ -271,7 +271,6 @@ app.use((error, _req, res, _next) => {
   res.status(error.statusCode || 500).json({ error: error.message || "server_error" });
 });
 
-app.listen(port, () => {
-  console.log(`DERMATIKA backend listo en http://localhost:${port}`);
-  console.log(`Frontend permitido: ${frontendOrigin}`);
+app.listen(process.env.PORT || 3000, "0.0.0.0", () => {
+  console.log(`DERMATIKA backend listo en puerto ${process.env.PORT || 3000}`);
 });
