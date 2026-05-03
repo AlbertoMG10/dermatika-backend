@@ -137,27 +137,39 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
     payload: JSON.stringify(event.data?.object || {})
   });
 
-  if (true) {
+  if (event.type === "payment_intent.succeeded") {
     const intent = event.data.object;
-const resend = new Resend(process.env.RESEND_API_KEY);
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    appendCsv("payments.csv", ["created_at", "provider", "payment_id", "status", "patient_reference", "amount", "currency"], {
+      created_at: new Date().toISOString(),
+      provider: "stripe",
+      payment_id: intent.id,
+      status: intent.status,
+      patient_reference: intent.metadata?.patient_reference || "",
+      amount: intent.amount_received || intent.amount,
+      currency: intent.currency
+    });
 
-  await resend.emails.send({
-    from: "onboarding@resend.dev",
-    to: "tuemailreal@gmail.com",
-    subject: "Nuevo pago recibido 💰",
-    html: `<p>Pago exitoso de ${intent.amount / 100} ${intent.currency}</p>`
-  });
+    if (process.env.RESEND_API_KEY && process.env.ADMIN_EMAIL) {
+      try {
+        console.log("INTENT DETECTADO:", intent.id);
 
-  appendCsv("payments.csv", ["created_at", "provider", "payment_id", "status", "patient_reference", "amount", "currency"], {
-    created_at: new Date().toISOString(),
-    provider: "stripe",
-    payment_id: intent.id,
-    status: intent.status,
-    patient_reference: intent.metadata?.patient_reference || "",
-    amount: intent.amount_received || intent.amount,
-    currency: intent.currency
-  });
-}
+        await resend.emails.send({
+          from: process.env.RESEND_FROM || "Dermatika <onboarding@resend.dev>",
+          to: process.env.ADMIN_EMAIL,
+          subject: "Nuevo pago recibido 💰",
+          html: `<p>Pago exitoso de $${(intent.amount_received || intent.amount) / 100} ${intent.currency}</p>`
+        });
+
+        console.log("EMAIL ENVIADO");
+      } catch (error) {
+        console.log("ERROR EMAIL:", error);
+      }
+    } else {
+      console.warn("[DERMATIKA payment mail skipped] Missing RESEND_API_KEY or ADMIN_EMAIL");
+    }
+  }
+
   res.json({ received: true });
 });
 
@@ -270,13 +282,16 @@ app.post("/api/create-stripe-payment-intent", asyncHandler(async (req, res) => {
   });
 }));
 
-
+app.get("*", (req, res) => {
+  res.sendFile(path.join(projectRoot, "index.html"));
+});
 
 app.use((error, _req, res, _next) => {
   console.error("[DERMATIKA backend error]", error);
   res.status(error.statusCode || 500).json({ error: error.message || "server_error" });
 });
 
-app.listen(process.env.PORT || 3000, "0.0.0.0", () => {
-  console.log(`DERMATIKA backend listo en puerto ${process.env.PORT || 3000}`);
+app.listen(port, () => {
+  console.log(`DERMATIKA backend listo en http://localhost:${port}`);
+  console.log(`Frontend permitido: ${frontendOrigin}`);
 });
