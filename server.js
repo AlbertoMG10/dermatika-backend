@@ -32,13 +32,12 @@ const isProduction = process.env.NODE_ENV === "production";
 const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:3000";
 
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
+  host: "smtp.resend.com",
   port: 465,
   secure: true,
-  connectionTimeout: 15000,
   auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD
+    user: "resend",
+    pass: process.env.RESEND_API_KEY
   }
 });
 
