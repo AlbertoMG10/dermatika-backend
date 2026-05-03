@@ -6,7 +6,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import multer from "multer";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import Stripe from "stripe";
 
 dotenv.config();
@@ -30,16 +30,6 @@ app.get("/api/config", (req, res) => {
 const port = Number(process.env.PORT || 3000);
 const isProduction = process.env.NODE_ENV === "production";
 const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:3000";
-
-const transporter = nodemailer.createTransport({
-  host: "smtp.resend.com",
-  port: 465,
-  secure: true,
-  auth: {
-    user: "resend",
-    pass: process.env.RESEND_API_KEY
-  }
-});
 
 const plans = {
   esencial: { name: "Nova Esencial", price: 1390 },
@@ -193,18 +183,7 @@ app.post("/api/intake", upload.fields([
   { name: "photoRight", maxCount: 1 }
 ]), asyncHandler(async (req, res) => {
   const fields = normalizeFields(req.body);
-  await transporter.sendMail({
-  from: "Dermatika <onboarding@resend.dev>",
-  to: process.env.ADMIN_EMAIL,
-  subject: "Nuevo paciente DERMATIKA",
-  html: `
-    <h2>Nuevo paciente</h2>
-    <p><b>Nombre:</b> ${fields.name || ""}</p>
-    <p><b>Email:</b> ${fields.email || ""}</p>
-    <p><b>Teléfono:</b> ${fields.phone || ""}</p>
-    <p><b>Plan:</b> ${fields.plan_key || ""}</p>
-  `
-});
+  const resend = new Resend(process.env.RESEND_API_KEY);
   const plan = getPlan(fields.plan_key);
   if (!plan) return res.status(400).json({ error: "invalid_plan" });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email || "")) return res.status(400).json({ error: "invalid_email" });
@@ -228,32 +207,28 @@ app.post("/api/intake", upload.fields([
     encrypted_payload: encryptPayload({ ...fields, files })
   });
 
-  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD && process.env.ADMIN_EMAIL) {
+  if (process.env.RESEND_API_KEY && process.env.ADMIN_EMAIL) {
     try {
-      await transporter.sendMail({
-        from: `"DERMATIKA" <${process.env.GMAIL_USER}>`,
+      await resend.emails.send({
+        from: process.env.RESEND_FROM || "Dermatika <onboarding@resend.dev>",
         to: process.env.ADMIN_EMAIL,
-        subject: `Nuevo paciente - ${req.body.patient_reference || reference}`,
-        text: `
-Nuevo cuestionario recibido
-
-Referencia: ${req.body.patient_reference || reference}
-Payment ID: ${req.body.payment_reference || "Sin referencia"}
-Nombre: ${req.body.name}
-WhatsApp: ${req.body.phone}
-Correo: ${req.body.email}
-Plan: ${req.body.plan_name || plan.name}
-Pago: ${req.body.payment_status}
-Payment Reference: ${req.body.payment_reference || "Sin referencia"}
-
-Revisa las fotos en el backend.
-      `
+        subject: "Nuevo paciente DERMATIKA",
+        html: `
+          <h2>Nuevo paciente</h2>
+          <p><b>Referencia:</b> ${fields.patient_reference || reference}</p>
+          <p><b>Payment ID:</b> ${fields.payment_reference || "Sin referencia"}</p>
+          <p><b>Nombre:</b> ${fields.name || ""}</p>
+          <p><b>Email:</b> ${fields.email || ""}</p>
+          <p><b>Teléfono:</b> ${fields.phone || ""}</p>
+          <p><b>Plan:</b> ${fields.plan_key || ""}</p>
+          <p><b>Pago:</b> ${fields.payment_status || "pending"}</p>
+        `
       });
     } catch (error) {
-      console.error("[DERMATIKA mail error]", error);
+      console.error("[DERMATIKA resend error]", error);
     }
   } else {
-    console.warn("[DERMATIKA mail skipped] Missing GMAIL_USER, GMAIL_APP_PASSWORD or ADMIN_EMAIL");
+    console.warn("[DERMATIKA mail skipped] Missing RESEND_API_KEY or ADMIN_EMAIL");
   }
 
   res.json({ ok: true, patientReference: reference, files });
@@ -287,8 +262,8 @@ app.post("/api/create-stripe-payment-intent", asyncHandler(async (req, res) => {
   });
 }));
 
-app.get("/", (req, res) => {
-  res.json({ ok: true, service: "dermatika-backend" });
+app.get("*", (req, res) => {
+  res.sendFile(path.join(projectRoot, "index.html"));
 });
 
 app.use((error, _req, res, _next) => {
