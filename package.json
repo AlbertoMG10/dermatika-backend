@@ -8,13 +8,13 @@
     "dev": "node --watch server.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "cors": "^2.8.5",
-    "stripe": "^14.0.0",
-    "multer": "^2.0.2",
-    "dotenv": "^16.4.5",
-    "nodemailer": "^6.9.13"
-  },
+  "express": "^4.19.2",
+  "cors": "^2.8.5",
+  "stripe": "^14.0.0",
+  "multer": "^2.0.2",
+  "dotenv": "^16.4.5",
+  "resend": "^4.0.0"
+}
   "engines": {
     "node": ">=20"
   }
