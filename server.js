@@ -724,7 +724,8 @@ app.get("/api/download/:filename", (req, res) => {
   return res.download(target);
 });
 
-app.post("/api/create-stripe-payment-intent", asyncHandler(async (req, res) => {
+app.post(["/api/create-stripe-payment-intent", "/api/create-payment-intent"], asyncHandler(async (req, res) => {
+  console.log("🔥 Stripe endpoint ejecutado", { path: req.path, planKey: req.body?.planKey, amount: req.body?.amount });
   const {
     planKey,
     amount,
@@ -744,8 +745,12 @@ app.post("/api/create-stripe-payment-intent", asyncHandler(async (req, res) => {
 
   if (paymentErrors.length) return validationError(res, paymentErrors);
   if (String(currency || "MXN").toLowerCase() !== "mxn") return validationError(res, [{ field: "currency", message: "La moneda debe ser MXN." }]);
-  const turnstile = await verifyTurnstile(sanitize(turnstileToken, 2048), req.ip);
-  if (!turnstile.ok) return res.status(403).json({ ok: false, error: turnstile.error || "turnstile_failed" });
+  if (process.env.TURNSTILE_SECRET_KEY && turnstileToken) {
+    const turnstile = await verifyTurnstile(sanitize(turnstileToken, 2048), req.ip);
+    if (!turnstile.ok) {
+      return res.status(403).json({ ok: false, error: turnstile.error || "turnstile_failed" });
+    }
+  }
 
   if (!process.env.STRIPE_PUBLIC_KEY) {
     return res.status(503).json({ ok: false, error: "stripe_public_key_missing" });
