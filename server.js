@@ -604,13 +604,16 @@ function asyncHandler(handler) {
 
 app.set("trust proxy", 1);
 app.use(helmet());
-app.use(rateLimit({
+const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 120,
   message: { ok: false, error: "Demasiados intentos. Intenta más tarde." },
   standardHeaders: true,
-  legacyHeaders: false
-}));
+  legacyHeaders: false,
+  skip: req => req.method === "OPTIONS" || ["/api/config", "/api/track-event"].includes(req.path)
+});
+
+app.use(generalLimiter);
 
 const allowedOrigins = (process.env.FRONTEND_ORIGIN || "")
   .split(",")
