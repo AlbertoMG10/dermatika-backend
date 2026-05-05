@@ -5,10 +5,13 @@ import { fileURLToPath } from "node:url";
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import helmet from "helmet";
 import multer from "multer";
 import PDFDocument from "pdfkit";
+import rateLimit from "express-rate-limit";
 import { Resend } from "resend";
 import Stripe from "stripe";
+import validator from "validator";
 
 dotenv.config();
 
@@ -49,6 +52,8 @@ const plans = {
   elite: { name: "Nova Elite", price: 2690 }
 };
 
+const allowedUploadTypes = new Set(["image/jpeg", "image/png", "application/pdf"]);
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, uploadDir),
@@ -59,7 +64,10 @@ const upload = multer({
   }),
   limits: { fileSize: 5 * 1024 * 1024, files: 5 },
   fileFilter: (_req, file, cb) => {
-    cb(null, /^image\/(png|jpe?g|webp|heic|heif)$/i.test(file.mimetype));
+    if (!allowedUploadTypes.has(file.mimetype)) {
+      return cb(new Error("Archivo no permitido"));
+    }
+    return cb(null, true);
   }
 });
 
@@ -121,7 +129,15 @@ function normalizeEmail(value) {
 }
 
 function isValidEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || ""));
+  return validator.isEmail(String(value || ""));
+}
+
+function isValidName(value) {
+  return /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s.'-]{2,80}$/.test(String(value || "").trim());
+}
+
+function hasUnsafeContent(value) {
+  return /(<\s*script|&lt;\s*script|javascript:|on\w+\s*=|&lt;\/?[a-z]|<\/?[a-z]|{{|}}|\$\{|;--)/i.test(String(value || ""));
 }
 
 function isValidPhone(value) {
@@ -139,6 +155,7 @@ function validationError(res, errors, status = 400) {
 
 function validateLeadFields(fields, mode = "partial") {
   const errors = [];
+  if (fields.name && !isValidName(fields.name)) errors.push({ field: "name", message: "Nombre invalido." });
   if (fields.email && !isValidEmail(fields.email)) errors.push({ field: "email", message: "Email invalido." });
   if (fields.phone && !isValidPhone(fields.phone)) errors.push({ field: "phone", message: "Telefono debe tener 10 digitos." });
   if (fields.shippingPostalCode && !isValidPostalCode(fields.shippingPostalCode)) errors.push({ field: "shippingPostalCode", message: "Codigo postal debe tener 5 digitos." });
@@ -148,6 +165,9 @@ function validateLeadFields(fields, mode = "partial") {
   if (fields.shippingExterior && !/^\d{1,6}$/.test(fields.shippingExterior)) errors.push({ field: "shippingExterior", message: "Numero exterior invalido." });
   if (fields.shippingInterior && !/^\d{1,6}$/.test(fields.shippingInterior)) errors.push({ field: "shippingInterior", message: "Numero interior invalido." });
   if (fields.plan_key && !plans[fields.plan_key]) errors.push({ field: "plan_key", message: "Plan invalido." });
+  for (const [field, value] of Object.entries(fields || {})) {
+    if (typeof value === "string" && hasUnsafeContent(value)) errors.push({ field, message: "Contenido invalido." });
+  }
   if (mode === "identity" && (!fields.email || !fields.phone)) errors.push({ field: "identity", message: "Email y telefono son obligatorios." });
   return errors;
 }
@@ -583,6 +603,14 @@ function asyncHandler(handler) {
 }
 
 app.set("trust proxy", 1);
+app.use(helmet());
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { ok: false, error: "Demasiados intentos. Intenta más tarde." },
+  standardHeaders: true,
+  legacyHeaders: false
+}));
 
 const allowedOrigins = (process.env.FRONTEND_ORIGIN || "")
   .split(",")
