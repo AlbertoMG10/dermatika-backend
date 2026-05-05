@@ -6,6 +6,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import multer from "multer";
+import PDFDocument from "pdfkit";
 import { Resend } from "resend";
 import Stripe from "stripe";
 
@@ -552,54 +553,31 @@ function buildMedicalHistoryLines(fields, payment, files) {
 }
 
 function writePdf(filePath, lines) {
-  const objects = [];
-  const addObject = body => {
-    objects.push(body);
-    return objects.length;
-  };
-  const pagesId = addObject("");
-  const fontId = addObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
-  const pageIds = [];
-  const pageLines = [];
-  const maxLines = 48;
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: "LETTER", margin: 48 });
+    const output = fs.createWriteStream(filePath);
+    const fontPath = path.join(__dirname, "fonts", "Roboto-Regular.ttf");
 
-  for (let i = 0; i < lines.length; i += maxLines) {
-    pageLines.push(lines.slice(i, i + maxLines));
-  }
+    output.on("finish", resolve);
+    output.on("error", reject);
+    doc.on("error", reject);
+    doc.pipe(output);
 
-  for (const page of pageLines) {
-    const content = [
-      "BT",
-      "/F1 10 Tf",
-      "48 748 Td",
-      "14 TL",
-      ...page.map((line, index) => `${index ? "T* " : ""}${pdfText(line)} Tj`),
-      "ET"
-    ].join("\n");
-    const contentId = addObject(`<< /Length ${Buffer.byteLength(content, "utf8")} >>\nstream\n${content}\nendstream`);
-    const pageId = addObject(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`);
-    pageIds.push(pageId);
-  }
+    if (fs.existsSync(fontPath)) {
+      doc.registerFont("Regular", fontPath);
+      doc.font("Regular");
+    } else {
+      doc.font("Helvetica");
+    }
 
-  objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
-  const catalogId = addObject(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
-  const chunks = ["%PDF-1.4\n"];
-  const offsets = [0];
-
-  objects.forEach((body, index) => {
-    offsets[index + 1] = Buffer.byteLength(chunks.join(""), "utf8");
-    chunks.push(`${index + 1} 0 obj\n${body}\nendobj\n`);
+    doc.fontSize(10);
+    for (const line of lines) {
+      if (doc.y > 744) doc.addPage();
+      doc.text(String(line ?? ""), { lineGap: 2 });
+    }
+    doc.end();
   });
-
-  const xrefOffset = Buffer.byteLength(chunks.join(""), "utf8");
-  chunks.push(`xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`);
-  for (let i = 1; i <= objects.length; i += 1) {
-    chunks.push(`${String(offsets[i]).padStart(10, "0")} 00000 n \n`);
-  }
-  chunks.push(`trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`);
-  fs.writeFileSync(filePath, chunks.join(""), "utf8");
 }
-
 function asyncHandler(handler) {
   return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 }
