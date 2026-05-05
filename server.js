@@ -605,11 +605,18 @@ function asyncHandler(handler) {
 }
 
 app.set("trust proxy", 1);
+
+const allowedOrigins = (process.env.FRONTEND_ORIGIN || "")
+  .split(",")
+  .map(o => o.trim());
+
 app.use(cors({
   origin(origin, cb) {
-    if (!origin || origin === frontendOrigin) return cb(null, true);
+    if (!origin || allowedOrigins.includes(origin)) {
+      return cb(null, true);
+    }
     if (!isProduction) return cb(null, true);
-    return cb(new Error("Origen no permitido por CORS"));
+    return cb(new Error("Origin no permitido por CORS"));
   },
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Stripe-Signature"]
