@@ -1,0 +1,4042 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DERMÁTIKA | Evaluación médica</title>
+  <meta name="description" content="Completa tu evaluación médica digital de DERMÁTIKA para definir un protocolo dermatológico personalizado para acné.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230F1B2D'/%3E%3Ctext x='50%25' y='56%25' text-anchor='middle' font-family='Arial,sans-serif' font-size='34' font-weight='700' fill='%234AAFC0'%3ED%3C/text%3E%3C/svg%3E">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=()">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https://www.google-analytics.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://js.stripe.com https://www.googletagmanager.com https://www.google-analytics.com; frame-src https://js.stripe.com https://hooks.stripe.com; connect-src 'self' https://api.stripe.com https://www.google-analytics.com https://www.googletagmanager.com; base-uri 'self'; form-action 'self' https://hooks.stripe.com; frame-ancestors 'none'; object-src 'none'">
+  <script src="https://js.stripe.com/v3/" async></script>
+  <style>
+    :root {
+      --teal: #4AAFC0;
+      --ink: #0F1B2D;
+      --paper: #F6FAFC;
+      --white: #FFFFFF;
+      --muted: #53657A;
+      --line: rgba(15, 27, 45, 0.12);
+      --soft: rgba(74, 175, 192, 0.12);
+      --shadow: 0 24px 70px rgba(15, 27, 45, 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(74, 175, 192, 0.16), transparent 34%),
+        var(--paper);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button,
+    input,
+    textarea {
+      font: inherit;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .page {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 100vh;
+      padding: clamp(16px, 4vw, 36px);
+    }
+
+    .topbar {
+      display: grid;
+      gap: 18px;
+      width: min(980px, 100%);
+      margin: 0 auto;
+    }
+
+    .brand {
+      display: inline-grid;
+      gap: 4px;
+      justify-self: start;
+      font-weight: 850;
+      letter-spacing: 8px;
+    }
+
+    .brand span {
+      font-size: clamp(19px, 3vw, 25px);
+    }
+
+    .brand span::after {
+      content: "*";
+      margin-left: 2px;
+      color: var(--teal);
+    }
+
+    .brand small {
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 750;
+      letter-spacing: 2.2px;
+      text-transform: uppercase;
+    }
+
+    .progress-track {
+      display: none;
+      height: 8px;
+      overflow: hidden;
+      background: rgba(83, 101, 122, 0.16);
+      border-radius: 999px;
+    }
+
+    .progress-track.is-active {
+      display: block;
+    }
+
+    .progress-fill {
+      width: 0%;
+      height: 100%;
+      background: var(--teal);
+      border-radius: inherit;
+      transition: width 260ms ease;
+    }
+
+    .progress-meta {
+      display: none;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .progress-meta.is-active {
+      display: flex;
+    }
+
+    .shell {
+      display: grid;
+      place-items: center;
+      width: min(1180px, 100%);
+      margin: 0 auto;
+      padding: clamp(28px, 6vw, 60px) 0;
+    }
+
+    .card {
+      width: min(760px, 100%);
+      padding: clamp(24px, 5vw, 48px);
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid var(--line);
+      border-radius: 32px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      animation: enter 320ms ease both;
+    }
+
+    @keyframes enter {
+      from {
+        opacity: 0;
+        transform: translateY(14px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .intro {
+      text-align: center;
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      color: var(--teal);
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    p {
+      margin-top: 0;
+    }
+
+    h1,
+    h2 {
+      margin-bottom: 16px;
+      color: var(--ink);
+      font-size: clamp(30px, 5vw, 48px);
+      line-height: 1.06;
+      letter-spacing: 0;
+    }
+
+    .intro p,
+    .question-help {
+      color: var(--muted);
+      font-size: clamp(16px, 2vw, 18px);
+      line-height: 1.65;
+    }
+
+    .question-help {
+      margin-bottom: 26px;
+    }
+
+    .options {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .option-card {
+      position: relative;
+      display: flex;
+      align-items: center;
+      min-height: 72px;
+      padding: 18px 20px;
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      cursor: pointer;
+      transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, background 180ms ease;
+    }
+
+    .option-card:hover {
+      transform: translateY(-1px);
+      border-color: var(--teal);
+      box-shadow: 0 14px 30px rgba(15, 27, 45, 0.06);
+    }
+
+    .option-card input {
+      position: absolute;
+      opacity: 0;
+    }
+
+    .option-card span {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .option-card strong {
+      color: var(--ink);
+      font-size: 18px;
+    }
+
+    .option-card:has(input:checked) {
+      background: var(--soft);
+      border-color: var(--teal);
+      box-shadow: inset 0 0 0 1px var(--teal);
+    }
+
+    .fields {
+      display: grid;
+      gap: 14px;
+      margin-bottom: 26px;
+    }
+
+    .field {
+      display: grid;
+      gap: 7px;
+    }
+
+    .field label {
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .field input,
+    .field textarea,
+    .field select {
+      width: 100%;
+      min-height: 56px;
+      padding: 14px 16px;
+      color: var(--ink);
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      outline: none;
+      transition: border-color 180ms ease, box-shadow 180ms ease;
+    }
+
+    .field textarea {
+      min-height: 116px;
+      resize: vertical;
+    }
+
+    .field input:focus,
+    .field textarea:focus,
+    .field select:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 4px var(--soft);
+    }
+
+    .check-field {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 16px;
+      color: var(--muted);
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      font-weight: 750;
+      line-height: 1.45;
+    }
+
+    .check-field input {
+      flex: 0 0 20px;
+      width: 20px;
+      height: 20px;
+      margin-top: 2px;
+      accent-color: var(--teal);
+    }
+
+    .field-error {
+      min-height: 18px;
+      color: var(--teal);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .bot-field {
+      position: absolute;
+      left: -10000px;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .privacy-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: -4px;
+    }
+
+    .privacy-link {
+      width: fit-content;
+      padding: 0;
+      color: var(--teal);
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .privacy-link:hover {
+      text-decoration: underline;
+      text-underline-offset: 4px;
+    }
+
+    .privacy-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: none;
+      place-items: center;
+      padding: 18px;
+      background: rgba(15, 27, 45, 0.34);
+      backdrop-filter: blur(16px);
+    }
+
+    .privacy-modal.is-open {
+      display: grid;
+      animation: modalFade 180ms ease both;
+    }
+
+    .privacy-dialog {
+      width: min(720px, 100%);
+      max-height: min(760px, calc(100vh - 36px));
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      border-radius: 30px;
+      box-shadow: 0 34px 90px rgba(15, 27, 45, 0.24);
+      animation: modalEnter 220ms ease both;
+    }
+
+    .privacy-dialog header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      padding: clamp(22px, 4vw, 34px) clamp(22px, 4vw, 36px) 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .privacy-dialog h2 {
+      margin: 0;
+      font-size: clamp(25px, 4vw, 36px);
+    }
+
+    .privacy-close {
+      display: grid;
+      place-items: center;
+      flex: 0 0 42px;
+      width: 42px;
+      height: 42px;
+      color: var(--ink);
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .privacy-content {
+      display: grid;
+      gap: 16px;
+      max-height: min(520px, calc(100vh - 230px));
+      overflow: auto;
+      padding: 22px clamp(22px, 4vw, 36px) clamp(22px, 4vw, 36px);
+      scroll-behavior: smooth;
+    }
+
+    .privacy-content p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .privacy-points {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 4px 0;
+    }
+
+    .privacy-points span {
+      padding: 14px;
+      color: var(--ink);
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      font-size: 14px;
+      font-weight: 850;
+      line-height: 1.35;
+    }
+
+    @keyframes modalFade {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes modalEnter {
+      from {
+        opacity: 0;
+        transform: translateY(14px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 56px;
+      padding: 0 26px;
+      color: var(--white);
+      background: var(--teal);
+      border: 1px solid var(--teal);
+      border-radius: 999px;
+      box-shadow: 0 18px 34px rgba(74, 175, 192, 0.22);
+      cursor: pointer;
+      font-weight: 850;
+      transition: transform 180ms ease, opacity 180ms ease, box-shadow 180ms ease;
+    }
+
+    .button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 22px 42px rgba(74, 175, 192, 0.28);
+    }
+
+    .button:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+      box-shadow: none;
+    }
+
+    .button-secondary {
+      color: var(--ink);
+      background: var(--white);
+      border-color: var(--line);
+      box-shadow: none;
+    }
+
+    .button-secondary:hover:not(:disabled) {
+      box-shadow: 0 12px 28px rgba(15, 27, 45, 0.08);
+    }
+
+    .button-full {
+      width: 100%;
+      margin-top: 18px;
+    }
+
+    .legal {
+      width: min(980px, 100%);
+      margin: 0 auto;
+      color: var(--muted);
+      text-align: center;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .eval-social-links {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 14px;
+    }
+
+    .eval-social-links a {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 38px;
+      padding: 8px 12px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid rgba(74, 175, 192, 0.18);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 850;
+      text-decoration: none;
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    }
+
+    .eval-social-links a:hover {
+      transform: translateY(-2px);
+      border-color: rgba(74, 175, 192, 0.42);
+      box-shadow: 0 14px 34px rgba(74, 175, 192, 0.12);
+    }
+
+    .eval-social-links span {
+      display: inline-grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      color: var(--white);
+      background: var(--ink);
+      border-radius: 50%;
+      font-size: 9px;
+      font-weight: 950;
+    }
+
+    .summary-note {
+      margin: 18px 0 0;
+      padding: 14px 16px;
+      color: var(--ink);
+      background: var(--soft);
+      border: 1px solid rgba(74, 175, 192, 0.22);
+      border-radius: 16px;
+      font-weight: 750;
+      line-height: 1.45;
+    }
+
+    .process-loader {
+      display: grid;
+      gap: 14px;
+      margin: 24px auto;
+      padding: 18px;
+      max-width: 430px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+    }
+
+    .process-loader span {
+      height: 8px;
+      overflow: hidden;
+      background: rgba(83, 101, 122, 0.16);
+      border-radius: 999px;
+    }
+
+    .process-loader span::before {
+      content: "";
+      display: block;
+      width: 42%;
+      height: 100%;
+      background: var(--teal);
+      border-radius: inherit;
+      animation: loadingSweep 1.8s ease-in-out infinite;
+    }
+
+    .process-loader p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+
+    @keyframes loadingSweep {
+      0% {
+        transform: translateX(-110%);
+      }
+      50% {
+        transform: translateX(70%);
+      }
+      100% {
+        transform: translateX(240%);
+      }
+    }
+
+    .result-card {
+      width: min(860px, 100%);
+      padding: clamp(22px, 4.5vw, 42px);
+    }
+
+    .result-hero {
+      display: grid;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .result-kicker {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      gap: 9px;
+      padding: 9px 12px;
+      color: var(--ink);
+      background: var(--soft);
+      border: 1px solid rgba(74, 175, 192, 0.24);
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .result-kicker::before {
+      content: "✓";
+      display: inline-grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      color: var(--white);
+      background: var(--teal);
+      border-radius: 50%;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .result-hero h1 {
+      max-width: 680px;
+      margin-bottom: 0;
+      font-size: clamp(30px, 4.5vw, 46px);
+    }
+
+    .result-hero p {
+      max-width: 680px;
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.65;
+    }
+
+    .review-card {
+      position: relative;
+      display: grid;
+      gap: 18px;
+      margin: 24px 0;
+      padding: clamp(18px, 4vw, 28px);
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top right, rgba(74, 175, 192, 0.16), transparent 34%),
+        var(--white);
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      box-shadow: 0 18px 44px rgba(15, 27, 45, 0.07);
+    }
+
+    .review-card h2 {
+      margin-bottom: 0;
+      font-size: clamp(26px, 4vw, 38px);
+    }
+
+    .review-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .review-item {
+      display: grid;
+      gap: 5px;
+      min-height: 88px;
+      padding: 16px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+    }
+
+    .review-item span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+
+    .review-item strong {
+      color: var(--ink);
+      font-size: clamp(17px, 3vw, 22px);
+      line-height: 1.22;
+    }
+
+    .ok-note {
+      margin: 0;
+      padding: 15px 16px;
+      color: var(--ink);
+      background: var(--soft);
+      border: 1px solid rgba(74, 175, 192, 0.24);
+      border-radius: 18px;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+
+    .identity-panel {
+      display: grid;
+      gap: 16px;
+      margin-top: 18px;
+      padding: clamp(18px, 4vw, 28px);
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 26px;
+    }
+
+    .identity-panel h2 {
+      margin: 0;
+      font-size: clamp(24px, 4vw, 34px);
+    }
+
+    .secure-note {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .contact-hero {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .contact-hero h1 {
+      margin-bottom: 0;
+      font-size: clamp(30px, 4.8vw, 44px);
+    }
+
+    .contact-hero p {
+      margin: 0 auto;
+      max-width: 560px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.6;
+    }
+
+    .post-eligibility {
+      width: min(1180px, 100%);
+      animation: enter 320ms ease both;
+    }
+
+    .approval-bar {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 26px;
+      padding: 14px 18px;
+      color: var(--white);
+      background: var(--ink);
+      border-radius: 999px;
+      box-shadow: 0 18px 44px rgba(15, 27, 45, 0.18);
+      text-align: center;
+      font-size: clamp(12px, 2vw, 14px);
+      font-weight: 900;
+      letter-spacing: 0.9px;
+      text-transform: uppercase;
+    }
+
+    .approval-countdown {
+      display: inline-flex;
+      min-width: 58px;
+      justify-content: center;
+      color: var(--ink);
+      background: var(--white);
+      border-radius: 999px;
+      padding: 5px 9px;
+    }
+
+    .post-hero {
+      display: grid;
+      gap: 12px;
+      max-width: 820px;
+      margin: 0 auto 26px;
+      text-align: center;
+    }
+
+    .post-hero h1 {
+      margin: 0;
+      font-size: clamp(34px, 6vw, 64px);
+    }
+
+    .post-hero p {
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(17px, 2.2vw, 21px);
+      line-height: 1.6;
+    }
+
+    .post-section {
+      margin-top: 22px;
+      padding: clamp(22px, 4vw, 34px);
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid var(--line);
+      border-radius: 32px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .case-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .case-summary article,
+    .goal-card,
+    .include-card,
+    .plan-card {
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    }
+
+    .case-summary article {
+      display: grid;
+      gap: 7px;
+      min-height: 116px;
+      padding: 18px;
+    }
+
+    .case-summary article:hover,
+    .goal-card:hover,
+    .include-card:hover,
+    .plan-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(74, 175, 192, 0.44);
+      box-shadow: 0 18px 38px rgba(15, 27, 45, 0.08);
+    }
+
+    .case-summary span,
+    .post-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.9px;
+      text-transform: uppercase;
+    }
+
+    .case-summary strong {
+      color: var(--ink);
+      font-size: clamp(17px, 2.5vw, 23px);
+      line-height: 1.2;
+    }
+
+    .recommendation {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, 0.8fr);
+      gap: clamp(20px, 4vw, 34px);
+      align-items: center;
+    }
+
+    .recommendation h2,
+    .post-section h2 {
+      font-size: clamp(28px, 4vw, 42px);
+    }
+
+    .recommendation p,
+    .post-section > p {
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.65;
+    }
+
+    .post-badge {
+      display: inline-flex;
+      width: fit-content;
+      margin-bottom: 16px;
+      padding: 8px 12px;
+      color: var(--teal);
+      background: var(--soft);
+      border: 1px solid rgba(74, 175, 192, 0.28);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .trust-box {
+      margin-top: 18px;
+      padding: 16px;
+      color: var(--ink);
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+
+    .recommendation img {
+      width: 100%;
+      border-radius: 24px;
+      box-shadow: 0 18px 42px rgba(15, 27, 45, 0.1);
+    }
+
+    .goal-grid,
+    .include-grid,
+    .plans-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .goal-card,
+    .include-card {
+      padding: 18px;
+      color: var(--ink);
+      font-weight: 850;
+      line-height: 1.35;
+    }
+
+    .goal-card::before,
+    .include-card::before {
+      content: "✓";
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      margin-bottom: 14px;
+      color: var(--white);
+      background: var(--teal);
+      border-radius: 50%;
+      font-weight: 900;
+    }
+
+    .plan-visual {
+      display: grid;
+      grid-template-columns: minmax(280px, 0.95fr) minmax(260px, 1fr);
+      gap: clamp(20px, 5vw, 54px);
+      align-items: center;
+      background:
+        radial-gradient(circle at top left, rgba(74, 175, 192, 0.18), transparent 36%),
+        rgba(255, 255, 255, 0.94);
+    }
+
+    .plan-image-card {
+      position: relative;
+      min-height: 360px;
+      overflow: hidden;
+      border-radius: 32px;
+      background: #FFFFFF;
+      border: 1px solid rgba(74, 175, 192, 0.2);
+      box-shadow: 0 28px 78px rgba(15, 27, 45, 0.12);
+    }
+
+    .plan-image-card::after {
+      content: "Protocolo dermatológico personalizado";
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      bottom: 18px;
+      padding: 14px 16px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid rgba(255, 255, 255, 0.62);
+      border-radius: 20px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 16px 34px rgba(15, 27, 45, 0.1);
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .plan-image-card img {
+      width: 100%;
+      height: 100%;
+      min-height: 360px;
+      display: block;
+      object-fit: cover;
+      transform: scale(1.01);
+      transition: transform 260ms ease;
+    }
+
+    .plan-image-card:hover img {
+      transform: scale(1.045);
+    }
+
+    .plan-visual-copy {
+      display: grid;
+      gap: 12px;
+    }
+
+    .plan-visual-copy h2 {
+      margin: 0;
+      font-size: clamp(34px, 5vw, 58px);
+      line-height: 1.03;
+    }
+
+    .plan-visual-copy p:last-child {
+      max-width: 620px;
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(18px, 2.4vw, 24px);
+      line-height: 1.45;
+    }
+
+    .include-note {
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .interactive-timeline {
+      display: grid;
+      gap: 12px;
+    }
+
+    .timeline-panel {
+      overflow: hidden;
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+    }
+
+    .timeline-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      min-height: 70px;
+      padding: 18px;
+      color: var(--ink);
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      text-align: left;
+      font-weight: 900;
+    }
+
+    .timeline-toggle span {
+      color: var(--teal);
+      margin-right: 10px;
+    }
+
+    .timeline-toggle::after {
+      content: "+";
+      color: var(--teal);
+      font-size: 24px;
+    }
+
+    .timeline-panel.is-open .timeline-toggle::after {
+      content: "−";
+    }
+
+    .timeline-content {
+      display: none;
+      padding: 0 18px 18px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .timeline-panel.is-open .timeline-content {
+      display: block;
+    }
+
+    .plan-card {
+      position: relative;
+      display: grid;
+      gap: 15px;
+      padding: 22px;
+    }
+
+    .plan-card.is-featured {
+      border-color: var(--teal);
+      box-shadow: 0 24px 60px rgba(74, 175, 192, 0.18);
+    }
+
+    .plan-card.is-recommended {
+      border-color: var(--teal);
+      box-shadow: 0 26px 70px rgba(74, 175, 192, 0.22);
+      animation: planGlow 2.8s ease-in-out infinite;
+    }
+
+    .plan-card.is-selected {
+      border-color: var(--teal);
+      box-shadow: inset 0 0 0 2px var(--teal), 0 24px 60px rgba(74, 175, 192, 0.18);
+    }
+
+    .plan-badge {
+      display: inline-flex;
+      width: fit-content;
+      padding: 7px 10px;
+      color: var(--white);
+      background: var(--teal);
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .plan-price {
+      color: var(--ink);
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 900;
+    }
+
+    .recommended-plan {
+      display: grid;
+      grid-template-columns: minmax(0, 0.95fr) minmax(280px, 0.75fr);
+      gap: clamp(18px, 4vw, 32px);
+      align-items: stretch;
+      background:
+        radial-gradient(circle at top right, rgba(74, 175, 192, 0.22), transparent 34%),
+        rgba(255, 255, 255, 0.94);
+    }
+
+    .recommended-card {
+      display: grid;
+      gap: 14px;
+      padding: clamp(20px, 4vw, 30px);
+      background: var(--ink);
+      border-radius: 28px;
+      box-shadow: 0 24px 70px rgba(15, 27, 45, 0.2);
+    }
+
+    .recommended-card .plan-badge {
+      background: var(--teal);
+    }
+
+    .recommended-card h3 {
+      margin: 0;
+      color: var(--white);
+      font-size: clamp(30px, 5vw, 46px);
+      line-height: 1.05;
+    }
+
+    .recommended-card p {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.78);
+      line-height: 1.6;
+    }
+
+    .recommended-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .recommended-meta span {
+      display: grid;
+      gap: 4px;
+      padding: 14px;
+      color: rgba(255, 255, 255, 0.72);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 18px;
+      font-size: 12px;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    .recommended-meta strong {
+      color: var(--white);
+      font-size: 18px;
+      text-transform: none;
+    }
+
+    .recommended-card .button {
+      margin-top: 6px;
+    }
+
+    .recommended-note {
+      display: grid;
+      align-content: center;
+      gap: 14px;
+      padding: clamp(18px, 4vw, 28px);
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 26px;
+    }
+
+    .recommended-note strong {
+      color: var(--ink);
+      font-size: 22px;
+      line-height: 1.18;
+    }
+
+    .recommended-note p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.62;
+    }
+
+    .plans-intro {
+      max-width: 760px;
+      margin-bottom: 22px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.65;
+    }
+
+    @keyframes planGlow {
+      0%, 100% {
+        box-shadow: 0 26px 70px rgba(74, 175, 192, 0.18);
+      }
+      50% {
+        box-shadow: 0 30px 82px rgba(74, 175, 192, 0.32);
+      }
+    }
+
+    .plan-card ul {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      color: var(--muted);
+      list-style: none;
+      line-height: 1.45;
+    }
+
+    .plan-card li::before {
+      content: "✓";
+      color: var(--teal);
+      margin-right: 8px;
+      font-weight: 900;
+    }
+
+    .plans-premium-section {
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top left, rgba(74, 175, 192, 0.16), transparent 34%),
+        linear-gradient(180deg, #F5F7FA 0%, #FFFFFF 100%);
+    }
+
+    .plans-premium-header {
+      display: grid;
+      gap: 10px;
+      max-width: 820px;
+      margin-bottom: 28px;
+    }
+
+    .plans-premium-header h2 {
+      margin: 0;
+      color: #071B34;
+      font-size: clamp(34px, 5vw, 56px);
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+
+    .plans-premium-header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(16px, 2vw, 19px);
+      line-height: 1.58;
+    }
+
+    .plans-decision-note {
+      display: inline-flex;
+      width: fit-content;
+      max-width: 100%;
+      margin-top: 8px;
+      padding: 12px 16px;
+      color: #071B34;
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid rgba(74, 175, 192, 0.22);
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 850;
+      box-shadow: 0 14px 34px rgba(7, 21, 43, 0.06);
+    }
+
+    .plans-grid {
+      align-items: stretch;
+      gap: clamp(16px, 2.4vw, 24px);
+    }
+
+    .plan-card {
+      isolation: isolate;
+      gap: 18px;
+      min-height: 100%;
+      padding: clamp(22px, 3vw, 30px);
+      border-radius: 32px;
+      overflow: hidden;
+      transform: translateZ(0);
+      transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease, background 220ms ease;
+    }
+
+    .plan-card::before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      z-index: -1;
+      opacity: 0;
+      transition: opacity 220ms ease;
+      pointer-events: none;
+    }
+
+    .plan-card:hover {
+      transform: translateY(-7px);
+    }
+
+    .plan-card:hover::before {
+      opacity: 1;
+    }
+
+    .plan-card.is-essential {
+      background: rgba(255, 255, 255, 0.96);
+      border-color: rgba(74, 175, 192, 0.22);
+      box-shadow: 0 24px 60px rgba(7, 21, 43, 0.08);
+    }
+
+    .plan-card.is-essential::before {
+      background: radial-gradient(circle at top right, rgba(74, 175, 192, 0.14), transparent 42%);
+    }
+
+    .plan-card.is-advanced {
+      background:
+        radial-gradient(circle at top right, rgba(74, 175, 192, 0.22), transparent 42%),
+        linear-gradient(180deg, #EAF7FB 0%, #FFFFFF 92%);
+      border-color: rgba(74, 175, 192, 0.48);
+      box-shadow: 0 30px 80px rgba(74, 175, 192, 0.2);
+    }
+
+    .plan-card.is-advanced::before {
+      background: radial-gradient(circle at center, rgba(74, 175, 192, 0.22), transparent 58%);
+    }
+
+    .plan-card.is-elite {
+      color: rgba(255, 255, 255, 0.82);
+      background:
+        radial-gradient(circle at top right, rgba(214, 192, 141, 0.24), transparent 36%),
+        radial-gradient(circle at bottom left, rgba(74, 175, 192, 0.2), transparent 44%),
+        linear-gradient(145deg, #07152B 0%, #0B1F3A 64%, #07152B 100%);
+      border-color: rgba(214, 192, 141, 0.38);
+      box-shadow: 0 34px 92px rgba(7, 21, 43, 0.24), 0 0 0 1px rgba(214, 192, 141, 0.08);
+      transform: scale(1.015);
+    }
+
+    .plan-card.is-elite:hover {
+      transform: translateY(-8px) scale(1.025);
+      box-shadow: 0 42px 110px rgba(7, 21, 43, 0.32), 0 0 42px rgba(214, 192, 141, 0.12);
+    }
+
+    .plan-card.is-elite::before {
+      background: linear-gradient(120deg, transparent 0%, rgba(214, 192, 141, 0.14) 45%, transparent 72%);
+      transform: translateX(-18%);
+      animation: eliteShimmer 4.8s ease-in-out infinite;
+    }
+
+    .plan-card.is-selected {
+      box-shadow: inset 0 0 0 2px var(--teal), 0 32px 84px rgba(74, 175, 192, 0.24);
+    }
+
+    .plan-card.is-recommended {
+      animation: planGlow 3.2s ease-in-out infinite;
+    }
+
+    .plan-card h3 {
+      margin: 0;
+      color: #071B34;
+      font-size: clamp(27px, 3.6vw, 38px);
+      line-height: 1.04;
+      letter-spacing: 0;
+    }
+
+    .plan-card.is-elite h3,
+    .plan-card.is-elite .plan-price,
+    .plan-card.is-elite .medication-name,
+    .plan-card.is-elite .plan-kicker {
+      color: #FFFFFF;
+    }
+
+    .plan-topline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      min-height: 30px;
+    }
+
+    .plan-badge,
+    .plan-tier-badge {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 11px;
+      color: #071B34;
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid rgba(74, 175, 192, 0.22);
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 950;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      box-shadow: 0 12px 28px rgba(7, 21, 43, 0.06);
+    }
+
+    .plan-card.is-advanced .plan-tier-badge,
+    .plan-card.is-advanced .plan-badge {
+      color: #FFFFFF;
+      background: #4AAFC0;
+      border-color: rgba(255, 255, 255, 0.38);
+    }
+
+    .plan-card.is-elite .plan-tier-badge,
+    .plan-card.is-elite .plan-badge {
+      color: #07152B;
+      background: #D6C08D;
+      border-color: rgba(214, 192, 141, 0.48);
+      box-shadow: 0 12px 30px rgba(214, 192, 141, 0.16);
+    }
+
+    .plan-ribbon {
+      position: absolute;
+      top: 22px;
+      right: -44px;
+      width: 168px;
+      padding: 8px 0;
+      color: #FFFFFF;
+      background: linear-gradient(90deg, #4AAFC0, #3B9FB1);
+      text-align: center;
+      font-size: 10px;
+      font-weight: 950;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transform: rotate(34deg);
+      box-shadow: 0 16px 34px rgba(74, 175, 192, 0.25);
+      animation: ribbonPulse 3.2s ease-in-out infinite;
+    }
+
+    .plan-medication {
+      display: grid;
+      gap: 5px;
+      padding: 14px 16px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.64);
+      border: 1px solid rgba(74, 175, 192, 0.18);
+    }
+
+    .plan-card.is-elite .plan-medication {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(214, 192, 141, 0.24);
+    }
+
+    .plan-medication span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+
+    .plan-card.is-elite .plan-medication span,
+    .plan-card.is-elite .plan-copy,
+    .plan-card.is-elite ul {
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    .medication-name {
+      color: #071B34;
+      font-size: 22px;
+      font-weight: 950;
+    }
+
+    .plan-price {
+      color: #071B34;
+      font-size: clamp(36px, 4.8vw, 52px);
+      line-height: 0.96;
+      font-weight: 950;
+      letter-spacing: -0.2px;
+    }
+
+    .plan-price small {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+
+    .plan-card.is-elite .plan-price small {
+      color: rgba(255, 255, 255, 0.62);
+    }
+
+    .plan-copy {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .plan-differentiator {
+      display: inline-flex;
+      width: fit-content;
+      padding: 9px 12px;
+      color: #071B34;
+      background: rgba(74, 175, 192, 0.1);
+      border: 1px solid rgba(74, 175, 192, 0.2);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .plan-card.is-elite .plan-differentiator {
+      color: #D6C08D;
+      background: rgba(214, 192, 141, 0.1);
+      border-color: rgba(214, 192, 141, 0.26);
+    }
+
+    .plan-card ul {
+      gap: 11px;
+      font-size: 14px;
+    }
+
+    .plan-card li {
+      display: flex;
+      gap: 9px;
+      align-items: flex-start;
+    }
+
+    .plan-card li::before {
+      content: "✓";
+      flex: 0 0 auto;
+      width: 18px;
+      height: 18px;
+      display: inline-grid;
+      place-items: center;
+      margin: 1px 0 0;
+      color: #FFFFFF;
+      background: #4AAFC0;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 950;
+    }
+
+    .plan-card.is-elite li::before {
+      color: #07152B;
+      background: #D6C08D;
+    }
+
+    .plan-card .button {
+      margin-top: auto;
+      border-radius: 999px;
+      box-shadow: 0 18px 42px rgba(74, 175, 192, 0.24);
+    }
+
+    .plan-card.is-elite .button {
+      color: #07152B;
+      background: #D6C08D;
+      box-shadow: 0 20px 44px rgba(214, 192, 141, 0.22);
+    }
+
+    .plan-card.is-elite .button:hover {
+      background: #E4CFA0;
+    }
+
+    @keyframes ribbonPulse {
+      0%, 100% {
+        filter: brightness(1);
+      }
+      50% {
+        filter: brightness(1.08);
+      }
+    }
+
+    @keyframes eliteShimmer {
+      0%, 100% {
+        opacity: 0;
+        transform: translateX(-24%);
+      }
+      45%, 55% {
+        opacity: 1;
+        transform: translateX(24%);
+      }
+    }
+
+    .payment-cta {
+      display: none;
+      margin-top: 20px;
+      padding: 20px;
+      background: var(--soft);
+      border: 1px solid rgba(74, 175, 192, 0.28);
+      border-radius: 22px;
+    }
+
+    .payment-cta.is-visible {
+      display: grid;
+      gap: 12px;
+    }
+
+    .checkout {
+      --checkout-bg: #FFFFFF;
+      --checkout-panel: #FFFFFF;
+      --checkout-text: #071B34;
+      --checkout-muted: #53657A;
+      --checkout-accent: #4AAFC0;
+      --checkout-line: rgba(74, 175, 192, 0.28);
+      --checkout-glow: rgba(74, 175, 192, 0.18);
+      --checkout-button-text: #FFFFFF;
+      position: relative;
+      overflow: hidden;
+      border-radius: 28px;
+      padding: clamp(18px, 3.2vw, 30px);
+      background: linear-gradient(170deg, var(--checkout-bg), color-mix(in srgb, var(--checkout-bg) 88%, #FFFFFF 12%));
+      border: 1px solid var(--checkout-line);
+      box-shadow: 0 26px 56px var(--checkout-glow);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+    }
+
+    .checkout.checkout-esencial {
+      --checkout-bg: #FFFFFF;
+      --checkout-panel: #FFFFFF;
+      --checkout-text: #071B34;
+      --checkout-muted: #53657A;
+      --checkout-accent: #4AAFC0;
+      --checkout-line: rgba(74, 175, 192, 0.34);
+      --checkout-glow: rgba(74, 175, 192, 0.14);
+      --checkout-button-text: #FFFFFF;
+    }
+
+    .checkout.checkout-avanzado {
+      --checkout-bg: #EAF7FB;
+      --checkout-panel: rgba(255, 255, 255, 0.95);
+      --checkout-text: #071B34;
+      --checkout-muted: #466276;
+      --checkout-accent: #4AAFC0;
+      --checkout-line: rgba(74, 175, 192, 0.4);
+      --checkout-glow: rgba(74, 175, 192, 0.2);
+      --checkout-button-text: #FFFFFF;
+    }
+
+    .checkout.checkout-elite {
+      --checkout-bg: #07152B;
+      --checkout-panel: #0B1E3A;
+      --checkout-text: #FFFFFF;
+      --checkout-muted: rgba(255, 255, 255, 0.78);
+      --checkout-accent: #D6C08D;
+      --checkout-line: rgba(214, 192, 141, 0.44);
+      --checkout-glow: rgba(214, 192, 141, 0.18);
+      --checkout-button-text: #07152B;
+    }
+
+    .checkout.checkout-elite::after {
+      content: "";
+      position: absolute;
+      inset: auto -20% -35% auto;
+      width: 380px;
+      height: 380px;
+      background: radial-gradient(circle, rgba(214, 192, 141, 0.26), rgba(214, 192, 141, 0));
+      pointer-events: none;
+    }
+
+    .checkout-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 8px 0 16px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .checkout-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.7px;
+      text-transform: uppercase;
+      border: 1px solid var(--checkout-line);
+      color: var(--checkout-accent);
+      background: color-mix(in srgb, var(--checkout-accent) 10%, transparent);
+      box-shadow: 0 10px 24px color-mix(in srgb, var(--checkout-accent) 20%, transparent);
+    }
+
+    .checkout-grid {
+      display: grid;
+      grid-template-columns: minmax(260px, 0.72fr) minmax(320px, 1fr);
+      gap: clamp(18px, 4vw, 34px);
+      align-items: start;
+      position: relative;
+      z-index: 1;
+    }
+
+    .checkout-summary {
+      display: grid;
+      gap: 12px;
+      padding: 20px;
+      background: var(--checkout-panel);
+      color: var(--checkout-text);
+      border-radius: 24px;
+      border: 1px solid var(--checkout-line);
+      box-shadow: 0 16px 34px color-mix(in srgb, var(--checkout-accent) 16%, transparent);
+    }
+
+    .checkout-summary span {
+      color: var(--checkout-muted);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.9px;
+      text-transform: uppercase;
+    }
+
+    .checkout-summary strong {
+      font-size: clamp(22px, 3vw, 32px);
+      line-height: 1.15;
+    }
+
+    .checkout-summary p {
+      margin: 0;
+      color: var(--checkout-muted);
+      line-height: 1.55;
+    }
+
+    .checkout-form {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .checkout .field label {
+      color: var(--checkout-text);
+    }
+
+    .checkout .field input,
+    .checkout .field textarea,
+    .checkout .field select {
+      color: var(--checkout-text);
+      background: color-mix(in srgb, var(--checkout-panel) 94%, #FFFFFF 6%);
+      border-color: var(--checkout-line);
+    }
+
+    .checkout.checkout-elite .field input,
+    .checkout.checkout-elite .field textarea,
+    .checkout.checkout-elite .field select {
+      background: rgba(255, 255, 255, 0.06);
+      color: #FFFFFF;
+    }
+
+    .checkout.checkout-elite .field input::placeholder,
+    .checkout.checkout-elite .field textarea::placeholder {
+      color: rgba(255, 255, 255, 0.62);
+    }
+
+    .checkout-form .field-full,
+    .checkout-form .button-full,
+    .checkout-form .payment-note,
+    .checkout-form .payment-status {
+      grid-column: 1 / -1;
+    }
+
+    .payment-note {
+      margin: 0;
+      padding: 14px 16px;
+      color: var(--checkout-muted);
+      background: color-mix(in srgb, var(--checkout-bg) 72%, #FFFFFF 28%);
+      border: 1px solid var(--checkout-line);
+      border-radius: 18px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .payment-status {
+      display: none;
+      margin: 0;
+      padding: 14px 16px;
+      color: var(--checkout-text);
+      background: color-mix(in srgb, var(--checkout-accent) 14%, transparent);
+      border: 1px solid var(--checkout-line);
+      border-radius: 18px;
+      font-size: 14px;
+      font-weight: 760;
+      line-height: 1.45;
+    }
+
+    .payment-status.is-visible {
+      display: block;
+    }
+
+    .stripe-payment-panel {
+      display: none;
+      grid-column: 1 / -1;
+      padding: 18px;
+      border: 1px solid var(--checkout-line);
+      border-radius: 22px;
+      background: color-mix(in srgb, var(--checkout-panel) 84%, #FFFFFF 16%);
+      box-shadow: 0 18px 42px color-mix(in srgb, var(--checkout-accent) 16%, transparent);
+    }
+
+    .stripe-payment-panel.is-visible {
+      display: grid;
+      gap: 12px;
+      animation: fadeUp 0.28s ease both;
+    }
+
+    .stripe-payment-panel h3 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .stripe-payment-panel p {
+      margin: 0;
+      color: var(--checkout-muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .stripe-element-box {
+      min-height: 112px;
+      padding: 14px;
+      border: 1px solid var(--checkout-line);
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--checkout-panel) 90%, #FFFFFF 10%);
+    }
+
+    .stripe-element-box.is-loading {
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .payment-error {
+      min-height: 18px;
+      color: #b42318;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .payment-success {
+      display: none;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--checkout-accent) 10%, transparent);
+      color: var(--checkout-text);
+      font-weight: 800;
+    }
+
+    .payment-success.is-visible {
+      display: block;
+    }
+
+    .checkout .button.button-full {
+      border-radius: 18px;
+      background: var(--checkout-accent);
+      color: var(--checkout-button-text);
+      box-shadow: 0 18px 34px color-mix(in srgb, var(--checkout-accent) 30%, transparent);
+    }
+
+    .checkout .button.button-full:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.03);
+      box-shadow: 0 22px 40px color-mix(in srgb, var(--checkout-accent) 36%, transparent);
+    }
+
+    .testimonial-mini-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .testimonial-mini {
+      padding: 20px;
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      color: var(--muted);
+      line-height: 1.55;
+      box-shadow: 0 14px 32px rgba(15, 27, 45, 0.06);
+    }
+
+    .testimonial-mini strong {
+      display: block;
+      margin-top: 14px;
+      color: var(--ink);
+    }
+
+    .urgency-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .faq-item {
+      border-bottom: 1px solid var(--line);
+    }
+
+    .faq-item:last-child {
+      border-bottom: 0;
+    }
+
+    .faq-question {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 18px 0;
+      color: var(--ink);
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      text-align: left;
+      font-weight: 900;
+    }
+
+    .faq-question::after {
+      content: "+";
+      color: var(--teal);
+      font-size: 24px;
+    }
+
+    .faq-item.is-open .faq-question::after {
+      content: "−";
+    }
+
+    .faq-answer {
+      display: none;
+      padding-bottom: 18px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .faq-item.is-open .faq-answer {
+      display: block;
+    }
+
+    .reveal-post {
+      opacity: 0;
+      transform: translateY(18px);
+      transition: opacity 520ms ease, transform 520ms ease;
+    }
+
+    .reveal-post.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 640px) {
+      .page {
+        padding: 16px;
+      }
+
+      .brand {
+        letter-spacing: 5px;
+      }
+
+      .card {
+        border-radius: 24px;
+      }
+
+      .actions {
+        flex-direction: column-reverse;
+        align-items: stretch;
+      }
+
+      .button {
+        width: 100%;
+      }
+
+      .result-card {
+        padding: 22px;
+      }
+
+      .review-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .review-item {
+        min-height: auto;
+      }
+
+      .approval-bar {
+        align-items: stretch;
+        flex-direction: column;
+        border-radius: 24px;
+      }
+
+      .case-summary,
+      .goal-grid,
+      .include-grid,
+      .plans-grid,
+      .recommendation,
+      .recommended-plan,
+      .recommended-meta,
+      .plan-visual,
+      .checkout-grid,
+      .checkout-form,
+      .testimonial-mini-grid,
+      .privacy-points {
+        grid-template-columns: 1fr;
+      }
+
+      .urgency-card {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .plan-image-card,
+      .plan-image-card img {
+        min-height: 260px;
+      }
+
+      .plan-image-card {
+        border-radius: 26px;
+      }
+
+      .checkout {
+        border-radius: 24px;
+        padding: 18px;
+      }
+
+      .checkout-head {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .plan-visual-copy h2 {
+        font-size: clamp(32px, 10vw, 44px);
+      }
+
+      .plan-visual-copy p:last-child {
+        font-size: 18px;
+      }
+
+      .plans-premium-section {
+        padding: 20px;
+        border-radius: 26px;
+      }
+
+      .plans-premium-header h2 {
+        font-size: clamp(30px, 10vw, 42px);
+      }
+
+      .plans-decision-note {
+        width: 100%;
+        border-radius: 18px;
+      }
+
+      .plan-card {
+        padding: 22px;
+        border-radius: 28px;
+        transform: none;
+      }
+
+      .plan-card:hover,
+      .plan-card.is-elite,
+      .plan-card.is-elite:hover {
+        transform: translateY(-3px);
+      }
+
+      .plan-ribbon {
+        top: 18px;
+        right: -48px;
+        width: 166px;
+      }
+
+      .plan-price {
+        font-size: 40px;
+      }
+
+      .recommended-card h3 {
+        font-size: 34px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        transition-duration: 1ms !important;
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+      }
+
+      .reveal-post {
+        opacity: 1;
+        transform: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <a class="brand" href="index.html" aria-label="Volver a DERMÁTIKA">
+        <span>DERMÁTIKA</span>
+        <small>Tratamientos dermatológicos</small>
+      </a>
+      <div class="progress-meta" id="progressMeta">
+        <span id="stepLabel">Paso 1 de 9</span>
+        <span id="progressPercent">10%</span>
+      </div>
+      <div class="progress-track" id="progressTrack" aria-hidden="true">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+    </header>
+
+    <main class="shell" id="app" aria-live="polite"></main>
+
+    <form id="medicalForm" class="compat-hidden-form" hidden novalidate>
+      <input id="name" name="name" type="hidden">
+      <input id="lastName" name="lastName" type="hidden">
+      <input id="birthdate" name="birthdate" type="hidden">
+      <input id="phone" name="phone" type="hidden">
+      <input id="city" name="city" type="hidden">
+      <input id="gender" name="gender" type="hidden">
+      <input id="weight" name="weight" type="hidden">
+      <input id="height" name="height" type="hidden">
+      <input id="diet" name="diet" type="hidden">
+      <input id="skin" name="skin" type="hidden">
+      <input id="severity" name="severity" type="hidden">
+      <input id="time" name="time" type="hidden">
+      <input id="previous" name="previous" type="hidden">
+      <input id="affectedAreas" name="affectedAreas" type="hidden">
+      <input id="lesionTypes" name="lesionTypes" type="hidden">
+      <input id="scarsOrSpots" name="scarsOrSpots" type="hidden">
+      <input id="history" name="history" type="hidden">
+      <input id="pregnancy" name="pregnancy" type="hidden">
+      <input id="meds" name="meds" type="hidden">
+      <input id="conditions" name="conditions" type="hidden">
+      <input id="allergies" name="allergies" type="hidden">
+      <input id="surgeries" name="surgeries" type="hidden">
+      <input id="kidneyHistory" name="kidneyHistory" type="hidden">
+      <input id="mentalHealthHistory" name="mentalHealthHistory" type="hidden">
+      <input id="alcoholUse" name="alcoholUse" type="hidden">
+      <input id="medical" name="medical" type="hidden">
+      <input id="shippingStreet" name="shippingStreet" type="hidden">
+      <input id="shippingExterior" name="shippingExterior" type="hidden">
+      <input id="shippingInterior" name="shippingInterior" type="hidden">
+      <input id="shippingNeighborhood" name="shippingNeighborhood" type="hidden">
+      <input id="shippingMunicipality" name="shippingMunicipality" type="hidden">
+      <input id="shippingState" name="shippingState" type="hidden">
+      <input id="shippingPostalCode" name="shippingPostalCode" type="hidden">
+      <input id="shippingReferences" name="shippingReferences" type="hidden">
+      <input id="photoFront" name="photoFront" type="file">
+      <input id="photoLeft" name="photoLeft" type="file">
+      <input id="photoRight" name="photoRight" type="file">
+      <input id="photoClose" name="photoClose" type="file">
+      <input id="photoAdditional" name="photoAdditional" type="file">
+      <input id="consent1" name="consent1" type="checkbox">
+      <input id="consent2" name="consent2" type="checkbox">
+      <input id="consent3" name="consent3" type="checkbox">
+      <input id="turnstileToken" name="turnstileToken" type="hidden">
+      <div id="validationSummary"></div>
+      <button id="medicalSubmitButton" type="submit">Enviar evaluación</button>
+    </form>
+
+    <div class="compat-hidden-form" hidden>
+      <div id="turnstileBox"></div>
+      <div id="turnstileWidget"></div>
+      <div id="turnstileFallback"></div>
+      <div id="patientReferenceDisplay"></div>
+      <div id="finalMotivationChip"></div>
+      <div id="finalMotivationText"></div>
+      <div id="legalModal"></div>
+      <div id="legalModalTitle"></div>
+      <div id="legalModalBody"></div>
+      <template id="legalPrivacy"></template>
+      <template id="legalTerms"></template>
+      <template id="legalConsent"></template>
+      <div id="toast"></div>
+    </div>
+
+    <footer class="legal">
+      Evaluación médica digital enfocada en soluciones reales. Tu información está protegida mediante procesos seguros y confidenciales.
+      <div class="eval-social-links" aria-label="Redes sociales DERMÁTIKA">
+        <a href="https://www.instagram.com/dermatikaofficial" target="_blank" rel="noopener noreferrer" aria-label="Instagram DERMÁTIKA"><span aria-hidden="true">IG</span>Instagram</a>
+        <a href="https://www.tiktok.com/@dermatika6" target="_blank" rel="noopener noreferrer" aria-label="TikTok DERMÁTIKA"><span aria-hidden="true">TT</span>TikTok</a>
+        <a href="https://www.facebook.com/share/1F9p5TpG3i/" target="_blank" rel="noopener noreferrer" aria-label="Facebook DERMÁTIKA"><span aria-hidden="true">FB</span>Facebook</a>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    const questions = [
+      {
+        id: "ageRange",
+        title: "¿Cuál es tu edad?",
+        type: "single",
+        options: ["Menor de 12 años", "12 a 17 años", "18 a 35 años", "36 años o más"]
+      },
+      {
+        id: "acneSeverity",
+        title: "¿Cómo describirías tu acné actualmente?",
+        type: "single",
+        options: [
+          { label: "Leve", help: "Puntos negros o brotes ocasionales" },
+          { label: "Moderado", help: "Brotes frecuentes e inflamación" },
+          { label: "Severo", help: "Acné doloroso, quístico o persistente" },
+          { label: "No estoy seguro", help: "Prefiero que el médico me oriente" }
+        ]
+      },
+      {
+        id: "acneAreas",
+        title: "¿En qué zonas tienes acné?",
+        type: "multiple",
+        options: ["Cara", "Espalda", "Pecho", "Cuello", "Hombros"]
+      },
+      {
+        id: "duration",
+        title: "¿Cuánto tiempo llevas con acné?",
+        type: "single",
+        options: ["Menos de 3 meses", "3 a 6 meses", "Más de 6 meses", "Más de 1 año"]
+      },
+      {
+        id: "previousTreatments",
+        title: "¿Has usado tratamientos antes?",
+        type: "single",
+        options: ["Solo skincare", "Cremas dermatológicas", "Antibióticos", "Isotretinoína antes", "Ninguno"]
+      },
+      {
+        id: "conditions",
+        title: "¿Tienes alguna de estas condiciones?",
+        type: "multipleExclusiveNone",
+        noneValue: "Ninguna de las anteriores",
+        options: [
+          "Embarazo actual o posible embarazo",
+          "Lactancia",
+          "Enfermedad hepática",
+          "Colesterol o triglicéridos altos",
+          "Depresión severa o ideas suicidas",
+          "Alergia a medicamentos",
+          "Ninguna de las anteriores"
+        ]
+      },
+      {
+        id: "currentMedication",
+        title: "¿Actualmente tomas algún medicamento?",
+        type: "singleWithText",
+        triggerValue: "Sí",
+        textId: "currentMedicationDetails",
+        textLabel: "Escribe qué medicamento tomas actualmente",
+        options: ["Sí", "No"]
+      },
+      {
+        id: "medicalFollowup",
+        title: "¿Buscas tratamiento con seguimiento médico?",
+        type: "single",
+        options: ["Sí, quiero seguimiento", "Solo quiero información", "No estoy seguro"]
+      },
+      {
+        id: "contact",
+        title: "Datos para contactarte",
+        type: "contact",
+        fields: [
+          { id: "fullName", label: "Nombre completo", inputMode: "text", pattern: "letters" },
+          { id: "age", label: "Edad", inputMode: "numeric", pattern: "number" },
+          { id: "whatsapp", label: "WhatsApp", inputMode: "tel", pattern: "number" },
+          { id: "email", label: "Correo electrónico", inputMode: "email", pattern: "email" },
+          { id: "cityState", label: "Ciudad / Estado", inputMode: "text", pattern: "required" }
+        ]
+      }
+    ];
+
+    const answers = {};
+    let currentStep = -1;
+    let isComplete = false;
+
+    const app = document.querySelector("#app");
+    const progressTrack = document.querySelector("#progressTrack");
+    const progressMeta = document.querySelector("#progressMeta");
+    const progressFill = document.querySelector("#progressFill");
+    const progressPercent = document.querySelector("#progressPercent");
+    const stepLabel = document.querySelector("#stepLabel");
+    let approvalTimer = null;
+    let lastSubmissionAt = 0;
+    const paymentLinks = {
+      esencial: "PEGAR_LINK_PAGO_ESENCIAL",
+      avanzado: "PEGAR_LINK_PAGO_AVANZADO",
+      elite: "PEGAR_LINK_PAGO_ELITE"
+    };
+    const plans = {
+      esencial: {
+        plan: "Esencial",
+        price: 1590,
+        medication: "Neotrex",
+        reason: "Tu evaluación sugiere un caso inicial, por lo que puedes comenzar con un protocolo esencial."
+      },
+      avanzado: {
+        plan: "Avanzado",
+        price: 1890,
+        medication: "Vastionin",
+        reason: "Tu evaluación indica brotes frecuentes e inflamación, por lo que recomendamos un protocolo más completo."
+      },
+      elite: {
+        plan: "Elite",
+        price: 2690,
+        medication: "Epuris",
+        reason: "Tu evaluación muestra características de acné persistente o de mayor intensidad, por lo que recomendamos un acompañamiento más completo."
+      }
+    };
+    const checkoutThemes = {
+      esencial: {
+        cardClass: "checkout-esencial",
+        accent: "#4AAFC0",
+        background: "#FFFFFF",
+        text: "#071B34",
+        button: "#4AAFC0",
+        label: "Checkout Esencial"
+      },
+      avanzado: {
+        cardClass: "checkout-avanzado",
+        accent: "#4AAFC0",
+        background: "#EAF7FB",
+        text: "#071B34",
+        button: "#4AAFC0",
+        label: "Checkout Avanzado"
+      },
+      elite: {
+        cardClass: "checkout-elite",
+        accent: "#D6C08D",
+        background: "#07152B",
+        text: "#FFFFFF",
+        button: "#D6C08D",
+        label: "Checkout Elite"
+      }
+    };
+    const legacyPlanAliases = {
+      esencial: plans.esencial,
+      plan_esencial: plans.esencial,
+      nova_esencial: plans.esencial,
+      avanzado: plans.avanzado,
+      plan_avanzado: plans.avanzado,
+      nova_avanzado: plans.avanzado,
+      elite: plans.elite,
+      plan_elite: plans.elite,
+      nova_elite: plans.elite
+    };
+    const API_BASE_URL = window.DERMATIKA_API_BASE_URL || "";
+    const STRIPE_PAYMENTS = {
+      createIntentEndpoint: "/api/create-stripe-payment-intent",
+      fallbackCreateIntentEndpoint: "/api/create-payment-intent"
+    };
+    const stripeState = {
+      stripe: null,
+      elements: null,
+      clientSecret: "",
+      paymentIntentId: "",
+      planKey: "",
+      isReady: false
+    };
+    const ANALYTICS = {
+      track(eventName, eventPayload = {}) {
+        const payload = {
+          event: eventName,
+          source: "dermatika_evaluacion",
+          timestamp: new Date().toISOString(),
+          patient_reference: ensureInternalFolio(),
+          ...eventPayload
+        };
+        if (typeof window.gtag === "function") window.gtag("event", eventName, eventPayload);
+        if (typeof window.fbq === "function") window.fbq("trackCustom", eventName, eventPayload);
+        try {
+          fetch(apiUrl("/api/track-event"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            keepalive: true
+          }).catch(() => {});
+        } catch (error) {
+          reportIntegrationIssue("Analytics no disponible", error);
+        }
+      }
+    };
+
+    function reportIntegrationIssue(message, error) {
+      if (window.DERMATIKA_DEBUG === true) {
+        console.warn(message, error?.message || error);
+      }
+    }
+
+    function apiUrl(path) {
+      if (/^https?:\/\//i.test(path)) return path;
+      return `${API_BASE_URL}${path}`;
+    }
+
+    async function loadPublicConfig() {
+      try {
+        const response = await fetch(apiUrl("/api/config"));
+        if (!response.ok) return null;
+        const config = await response.json();
+        window.DERMATIKA_CONFIG = {
+          ...(window.DERMATIKA_CONFIG || {}),
+          ...config,
+          STRIPE_PUBLIC_KEY: config?.publicKey || config?.STRIPE_PUBLIC_KEY || window.DERMATIKA_CONFIG?.STRIPE_PUBLIC_KEY || ""
+        };
+        if (config?.paymentLinks) {
+          Object.assign(paymentLinks, {
+            esencial: config.paymentLinks.esencial || paymentLinks.esencial,
+            avanzado: config.paymentLinks.avanzado || paymentLinks.avanzado,
+            elite: config.paymentLinks.elite || paymentLinks.elite
+          });
+        }
+        if (config?.GA4_ID && !window.gtag) {
+          window.dataLayer = window.dataLayer || [];
+          window.gtag = function gtag(){ window.dataLayer.push(arguments); };
+          window.gtag("js", new Date());
+          window.gtag("config", config.GA4_ID, { send_page_view: false });
+        }
+        return config;
+      } catch (error) {
+        reportIntegrationIssue("Config pública no disponible", error);
+        return null;
+      }
+    }
+
+    function createPatientReference() {
+      return `DMK-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
+    function ensureInternalFolio() {
+      const key = "dermatika_internal_folio";
+      let folio = "";
+      try {
+        folio = localStorage.getItem(key) || "";
+        if (!folio) {
+          folio = createPatientReference();
+          localStorage.setItem(key, folio);
+        }
+      } catch (error) {
+        folio = folio || createPatientReference();
+      }
+      return folio;
+    }
+
+    function setCompatValue(id, value) {
+      const field = document.getElementById(id);
+      if (!field) return;
+      if (field.type === "checkbox") {
+        field.checked = Boolean(value);
+        return;
+      }
+      field.value = Array.isArray(value) ? value.join(", ") : String(value ?? "");
+    }
+
+    function planKeyFromSelection(planName = window.formData?.selectedPlan || "") {
+      const normalized = String(planName).toLowerCase();
+      if (normalized.includes("elite")) return "elite";
+      if (normalized.includes("avanzado")) return "avanzado";
+      return "esencial";
+    }
+
+    function getCurrentPlanPayload() {
+      const key = planKeyFromSelection();
+      const plan = legacyPlanAliases[key] || plans.esencial;
+      const selectedPrice = Number(window.formData?.selectedPrice || plan.price);
+      const selectedPlan = window.formData?.selectedPlan || plan.plan;
+      const selectedMedication = window.formData?.selectedMedication || plan.medication;
+      return {
+        plan_key: key,
+        plan_name: selectedPlan,
+        plan_price: selectedPrice,
+        amount: selectedPrice,
+        currency: "mxn",
+        medication: selectedMedication,
+        selectedPlan,
+        selectedPrice,
+        selectedMedication
+      };
+    }
+
+    function getCheckoutTheme() {
+      const key = planKeyFromSelection();
+      return { key, ...(checkoutThemes[key] || checkoutThemes.esencial) };
+    }
+
+    function syncLegacyMedicalForm(payload = window.formData || {}) {
+      const data = { ...answers, ...payload };
+      const shipping = data.shipping || {};
+      const fullName = data.nombre || data.fullName || data.name || "";
+      const lastName = data.apellido || data.lastName || "";
+      const combinedName = `${fullName} ${lastName}`.trim() || data.fullName || data.name || "";
+      const ageValue = data.age || data.edad || data.ageRange || "";
+      const conditions = Array.isArray(data.conditions) ? data.conditions.join(", ") : (data.conditions || "");
+
+      setCompatValue("name", combinedName);
+      setCompatValue("lastName", lastName);
+      setCompatValue("birthdate", data.birthdate || "");
+      setCompatValue("age", ageValue);
+      setCompatValue("phone", data.whatsapp || data.phone || "");
+      setCompatValue("email", data.correo || data.email || "");
+      setCompatValue("city", data.cityState || data.estado || data.city || "");
+      setCompatValue("severity", data.acne || data.acneSeverity || "");
+      setCompatValue("time", data.tiempo || data.duration || "");
+      setCompatValue("previous", Array.isArray(data.previousTreatments) ? data.previousTreatments.join(", ") : (data.previousTreatments || ""));
+      setCompatValue("affectedAreas", Array.isArray(data.acneAreas) ? data.acneAreas.join(", ") : (data.zonas || data.acneAreas || ""));
+      setCompatValue("lesionTypes", data.lesionTypes || data.acne || data.acneSeverity || "");
+      setCompatValue("scarsOrSpots", data.scarsOrSpots || "");
+      setCompatValue("history", data.history || "");
+      setCompatValue("pregnancy", data.embarazo ? "Sí" : "No");
+      setCompatValue("meds", data.currentMedicationDetails || data.currentMedication || "");
+      setCompatValue("conditions", conditions);
+      setCompatValue("allergies", data.alergia_medicamentos ? "Alergia a medicamentos" : "");
+      setCompatValue("kidneyHistory", data.kidneyHistory || "");
+      setCompatValue("mentalHealthHistory", data.depresion_severa ? "Depresión severa o ideas suicidas" : "");
+      setCompatValue("medical", data.medicalFollowup || "");
+      setCompatValue("shippingStreet", shipping.shipAddress1 || "");
+      setCompatValue("shippingInterior", shipping.shipAddress2 || "");
+      setCompatValue("shippingMunicipality", shipping.shipCity || "");
+      setCompatValue("shippingState", shipping.shipState || data.estado || "");
+      setCompatValue("shippingPostalCode", shipping.shipZip || "");
+      setCompatValue("consent1", data.acepta_privacidad || data.privacyAccepted);
+      setCompatValue("consent2", data.acepta_privacidad || data.privacyAccepted);
+      setCompatValue("consent3", data.acepta_privacidad || data.privacyAccepted);
+    }
+
+    function collectMedicalFormData(extra = {}) {
+      syncLegacyMedicalForm();
+      const form = document.getElementById("medicalForm");
+      const fd = new FormData(form);
+      const planPayload = getCurrentPlanPayload();
+      Object.entries({
+        ...planPayload,
+        brand: "DERMÁTIKA",
+        age: window.formData?.age || window.formData?.ageRange || answers.age || answers.ageRange || "",
+        email: window.formData?.correo || window.formData?.email || answers.email || "",
+        phone: window.formData?.whatsapp || window.formData?.phone || answers.whatsapp || "",
+        payment_status: extra.payment_status || "pending",
+        session_id: extra.session_id || "",
+        patient_reference: ensureInternalFolio(),
+        internal_folio: ensureInternalFolio(),
+        external_reference: ensureInternalFolio(),
+        folio_dermatika: ensureInternalFolio(),
+        submitted_at: new Date().toISOString(),
+        answers_json: JSON.stringify(window.formData || {})
+      }).forEach(([key, value]) => fd.set(key, value));
+      return fd;
+    }
+
+    function collectAutosaveData(status = "Formulario iniciado", options = {}) {
+      const fd = collectMedicalFormData(options);
+      fd.set("status", status);
+      fd.set("autosave", "true");
+      return fd;
+    }
+
+    async function autosaveLead(status = "Formulario actualizado", options = {}) {
+      const fd = collectAutosaveData(status, options);
+      try {
+        const response = await fetch(apiUrl("/api/lead-autosave"), {
+          method: "POST",
+          body: fd,
+          keepalive: true
+        });
+        return response.ok;
+      } catch (error) {
+        reportIntegrationIssue("Autosave no disponible", error);
+        return false;
+      }
+    }
+
+    async function submitIntake(paymentReference = "") {
+      const fd = collectMedicalFormData({ payment_status: paymentReference ? "pending_payment_redirect" : "pending" });
+      if (paymentReference) fd.set("payment_reference", paymentReference);
+      try {
+        const response = await fetch(apiUrl("/api/intake"), {
+          method: "POST",
+          body: fd,
+          keepalive: true
+        });
+        return response.ok;
+      } catch (error) {
+        reportIntegrationIssue("Envío a intake no disponible", error);
+        return false;
+      }
+    }
+
+    function handleCheckoutReturn() {
+      const params = new URLSearchParams(window.location.search);
+      const paymentStatus = params.get("payment_status") || params.get("redirect_status");
+      if (paymentStatus === "succeeded" || paymentStatus === "success") {
+        renderThankYouPage();
+        ANALYTICS.track("payment_success", getCurrentPlanPayload());
+        return true;
+      }
+      return false;
+    }
+
+    async function handleStripeReturn() {
+      const params = new URLSearchParams(window.location.search);
+      const clientSecret = params.get("payment_intent_client_secret");
+      if (!clientSecret || !window.Stripe) return false;
+      const publicKey = window.DERMATIKA_CONFIG?.STRIPE_PUBLIC_KEY || localStorage.getItem("dermatika_stripe_public_key") || "";
+      if (!publicKey) return false;
+      try {
+        const stripe = window.Stripe(publicKey);
+        const { paymentIntent } = await stripe.retrievePaymentIntent(clientSecret);
+        if (paymentIntent?.status === "succeeded") {
+          await submitIntake(paymentIntent.id || "");
+          ANALYTICS.track("payment_success", {
+            ...getCurrentPlanPayload(),
+            transaction_id: paymentIntent.id || ensureInternalFolio()
+          });
+          renderThankYouPage();
+          return true;
+        }
+      } catch (error) {
+        reportIntegrationIssue("Stripe return error", error);
+      }
+      return false;
+    }
+
+    async function handleResumeLink() {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("resume");
+      if (!token) return null;
+      try {
+        const response = await fetch(apiUrl(`/api/resume/${encodeURIComponent(token)}`));
+        if (!response.ok) return null;
+        const data = await response.json();
+        window.formData = { ...window.formData, ...(data?.formData || data || {}) };
+        syncLegacyMedicalForm(window.formData);
+        return data;
+      } catch (error) {
+        reportIntegrationIssue("Resume link no disponible", error);
+        return null;
+      }
+    }
+
+    function optionLabel(option) {
+      return typeof option === "string" ? option : option.label;
+    }
+
+    function optionHelp(option) {
+      return typeof option === "string" ? "" : option.help;
+    }
+
+    function renderWelcomeScreen() {
+      progressTrack.classList.remove("is-active");
+      progressMeta.classList.remove("is-active");
+      app.innerHTML = `
+        <section class="card intro">
+          <p class="eyebrow">Evaluación online</p>
+          <h1>Evaluación médica para tratamiento de acné</h1>
+          <p>Responde unas preguntas rápidas para saber si puedes continuar con una valoración médica personalizada.</p>
+          <button class="button button-full" type="button" id="startButton">Comenzar evaluación</button>
+        </section>
+      `;
+      document.querySelector("#startButton").addEventListener("click", startQuiz);
+    }
+
+    function renderIntro() {
+      renderWelcomeScreen();
+    }
+
+    function startQuiz() {
+      ANALYTICS.track("start_evaluation", { step: "welcome" });
+      currentStep = 0;
+      renderQuestion(currentStep);
+    }
+
+    function updateProgress() {
+      const percent = Math.round(((currentStep + 1) / questions.length) * 100);
+      progressTrack.classList.add("is-active");
+      progressMeta.classList.add("is-active");
+      progressFill.style.width = `${percent}%`;
+      progressPercent.textContent = `${percent}%`;
+      stepLabel.textContent = `Paso ${currentStep + 1} de ${questions.length}`;
+    }
+
+    function isStepValid(question) {
+      const value = answers[question.id];
+      if (question.type === "multiple" || question.type === "multipleExclusiveNone") {
+        return Array.isArray(value) && value.length > 0;
+      }
+      if (question.type === "singleWithText") {
+        if (!value) return false;
+        if (value === question.triggerValue) return Boolean((answers[question.textId] || "").trim());
+        return true;
+      }
+      if (question.type === "contact") {
+        return question.fields.every((field) => {
+          const input = document.querySelector(`#${field.id}`);
+          const value = input ? input.value : answers[field.id] || "";
+          answers[field.id] = value;
+          return validateField(field, value).ok;
+        });
+      }
+      return Boolean(value);
+    }
+
+    function renderStep() {
+      isComplete = false;
+      const question = questions[currentStep];
+      updateProgress();
+
+      app.innerHTML = `
+        <section class="card">
+          <p class="eyebrow">Evaluación DERMÁTIKA</p>
+          <h2>${question.title}</h2>
+          ${question.type === "contact" ? "<p class=\"question-help\">Usaremos estos datos para dar seguimiento a tu evaluación. Todos los campos son obligatorios.</p>" : ""}
+          <div id="questionBody"></div>
+          <div class="actions">
+            <button class="button button-secondary" type="button" id="backButton">Atrás</button>
+            <button class="button" type="button" id="nextButton" disabled>${currentStep === questions.length - 1 ? "Enviar evaluación" : "Siguiente"}</button>
+          </div>
+        </section>
+      `;
+
+      renderQuestionBody(question);
+
+      document.querySelector("#backButton").addEventListener("click", goBack);
+      document.querySelector("#nextButton").addEventListener("click", goNext);
+      updateNextState();
+    }
+
+    function renderQuestion(stepIndex) {
+      currentStep = stepIndex;
+      renderStep();
+    }
+
+    function renderQuestionBody(question) {
+      const body = document.querySelector("#questionBody");
+
+      if (question.type === "contact") {
+        body.innerHTML = `
+          <div class="fields">
+            ${question.fields.map((field) => `
+              <div class="field">
+                <label for="${field.id}">${field.label}</label>
+                <input id="${field.id}" type="${field.pattern === "email" ? "email" : field.pattern === "number" ? "tel" : "text"}" inputmode="${field.inputMode}" autocomplete="${field.id === "email" ? "email" : field.id === "whatsapp" ? "tel" : field.id === "fullName" ? "name" : "on"}" maxlength="${field.pattern === "number" ? "15" : field.pattern === "email" ? "96" : "90"}" value="${answers[field.id] || ""}">
+                <span class="field-error" data-error-for="${field.id}"></span>
+              </div>
+            `).join("")}
+          </div>
+        `;
+
+        question.fields.forEach((field) => {
+          const input = document.querySelector(`#${field.id}`);
+          input.addEventListener("input", () => {
+            let value = input.value;
+            if (field.pattern === "number") value = value.replace(/\D/g, "");
+            if (field.pattern === "letters") value = value.replace(/[^a-zA-ZÀ-ÿ\s'.-]/g, "");
+            input.value = value;
+            answers[field.id] = value;
+            showFieldError(field);
+            updateNextState();
+          });
+          showFieldError(field, false);
+        });
+        return;
+      }
+
+      body.innerHTML = `
+        <div class="options">
+          ${question.options.map((option) => {
+            const label = optionLabel(option);
+            const help = optionHelp(option);
+            const inputType = question.type === "single" || question.type === "singleWithText" ? "radio" : "checkbox";
+            const checked = isChecked(question, label) ? "checked" : "";
+            return `
+              <label class="option-card">
+                <input type="${inputType}" name="${question.id}" value="${label}" ${checked}>
+                <span>
+                  <strong>${label}</strong>
+                  ${help ? `<small>${help}</small>` : ""}
+                </span>
+              </label>
+            `;
+          }).join("")}
+        </div>
+        ${question.type === "singleWithText" ? `
+          <div class="field ${answers[question.id] === question.triggerValue ? "" : "hidden"}" id="conditionalField">
+            <label for="${question.textId}">${question.textLabel}</label>
+            <textarea id="${question.textId}">${answers[question.textId] || ""}</textarea>
+            <span class="field-error" data-error-for="${question.textId}"></span>
+          </div>
+        ` : ""}
+      `;
+
+      document.querySelectorAll(`input[name="${question.id}"]`).forEach((input) => {
+        input.addEventListener("change", () => handleOptionChange(question, input));
+      });
+
+      if (question.type === "singleWithText") {
+        const textarea = document.querySelector(`#${question.textId}`);
+        textarea?.addEventListener("input", () => {
+          answers[question.textId] = textarea.value;
+          showConditionalError(question);
+          updateNextState();
+        });
+        showConditionalError(question, false);
+      }
+    }
+
+    function isChecked(question, label) {
+      const value = answers[question.id];
+      return Array.isArray(value) ? value.includes(label) : value === label;
+    }
+
+    function handleOptionChange(question, input) {
+      if (question.type === "single" || question.type === "singleWithText") {
+        answers[question.id] = input.value;
+      } else {
+        let current = Array.isArray(answers[question.id]) ? [...answers[question.id]] : [];
+        if (question.type === "multipleExclusiveNone") {
+          if (input.value === question.noneValue && input.checked) {
+            current = [question.noneValue];
+            document.querySelectorAll(`input[name="${question.id}"]`).forEach((item) => {
+              item.checked = item.value === question.noneValue;
+            });
+          } else {
+            current = current.filter((item) => item !== question.noneValue);
+            const noneInput = document.querySelector(`input[name="${question.id}"][value="${question.noneValue}"]`);
+            if (noneInput) noneInput.checked = false;
+            current = input.checked ? [...current, input.value] : current.filter((item) => item !== input.value);
+          }
+        } else {
+          current = input.checked ? [...current, input.value] : current.filter((item) => item !== input.value);
+        }
+        answers[question.id] = [...new Set(current)];
+      }
+
+      if (question.type === "singleWithText") {
+        const field = document.querySelector("#conditionalField");
+        if (field) field.classList.toggle("hidden", answers[question.id] !== question.triggerValue);
+        if (answers[question.id] !== question.triggerValue) answers[question.textId] = "";
+        showConditionalError(question);
+      }
+
+      updateNextState();
+    }
+
+    function validateField(field, value) {
+      const clean = value.trim();
+      if (!clean) return { ok: false, message: "Campo obligatorio." };
+      if (field.pattern === "letters" && !/^[a-zA-ZÀ-ÿ\s'.-]+$/.test(clean)) return { ok: false, message: "Usa solo letras." };
+      if (field.pattern === "number" && !/^\d+$/.test(clean)) return { ok: false, message: "Usa solo números." };
+      if (field.id === "age" && (Number(clean) < 1 || Number(clean) > 120)) return { ok: false, message: "Ingresa una edad válida." };
+      if (field.pattern === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return { ok: false, message: "Correo no válido." };
+      return { ok: true, message: "" };
+    }
+
+    function showFieldError(field, shouldShow = true) {
+      const error = document.querySelector(`[data-error-for="${field.id}"]`);
+      if (!error) return;
+      const result = validateField(field, answers[field.id] || "");
+      error.textContent = shouldShow && !result.ok ? result.message : "";
+    }
+
+    function showConditionalError(question, shouldShow = true) {
+      const error = document.querySelector(`[data-error-for="${question.textId}"]`);
+      if (!error) return;
+      const needsText = answers[question.id] === question.triggerValue;
+      error.textContent = shouldShow && needsText && !(answers[question.textId] || "").trim() ? "Campo obligatorio." : "";
+    }
+
+    function updateNextState() {
+      const question = questions[currentStep];
+      const nextButton = document.querySelector("#nextButton");
+      if (nextButton) nextButton.disabled = !isStepValid(question);
+    }
+
+    function goBack() {
+      if (currentStep <= 0) {
+        currentStep = -1;
+        renderWelcomeScreen();
+        return;
+      }
+      currentStep -= 1;
+      renderQuestion(currentStep);
+    }
+
+    function goNext() {
+      const question = questions[currentStep];
+      if (question.type === "contact") {
+        question.fields.forEach((field) => showFieldError(field));
+      }
+      if (!isStepValid(question)) return;
+
+      if (currentStep === questions.length - 1) {
+        window.formData = buildFormData();
+        submitEvaluation(window.formData);
+        ANALYTICS.track("form_submit", { step: "questionnaire_complete" });
+        if (evaluateEligibility() === "no_aprobado") {
+          mostrarPantallaNoAprobado();
+        } else {
+          renderMedicalReviewScreen();
+        }
+        return;
+      }
+
+      currentStep += 1;
+      ANALYTICS.track(`form_step_${currentStep + 1}`, { step: questions[currentStep]?.id || "", step_index: currentStep + 1 });
+      ANALYTICS.track("form_step_view", { step: questions[currentStep]?.id || "", step_index: currentStep + 1 });
+      renderQuestion(currentStep);
+    }
+
+    function buildFormData() {
+      const condiciones = Array.isArray(answers.conditions) ? answers.conditions : [];
+      return {
+        ...answers,
+        acne: answers.acneSeverity || "",
+        tiempo: answers.duration || "",
+        zonas: Array.isArray(answers.acneAreas) ? answers.acneAreas.join(", ") : "",
+        embarazo: condiciones.includes("Embarazo actual o posible embarazo"),
+        lactancia: condiciones.includes("Lactancia"),
+        enfermedad_hepatica: condiciones.includes("Enfermedad hepática"),
+        depresion_severa: condiciones.includes("Depresión severa o ideas suicidas"),
+        alergia_medicamentos: condiciones.includes("Alergia a medicamentos")
+      };
+    }
+
+    function evaluateEligibility() {
+      const respuestas = window.formData;
+
+      if (
+        respuestas.embarazo === true ||
+        respuestas.lactancia === true ||
+        respuestas.enfermedad_hepatica === true ||
+        respuestas.depresion_severa === true ||
+        respuestas.alergia_medicamentos === true
+      ) {
+        return "no_aprobado";
+      }
+
+      return "aprobado";
+    }
+
+    function setFinalProgress(label) {
+      isComplete = true;
+      progressFill.style.width = "100%";
+      progressPercent.textContent = "100%";
+      stepLabel.textContent = label;
+    }
+
+    function mostrarPantallaNoAprobado() {
+      setFinalProgress("Evaluación completada");
+      app.innerHTML = `
+        <section class="resultado no-aprobado">
+          <div class="card intro">
+            <p class="eyebrow">Evaluación completada</p>
+            <h1>Lo sentimos</h1>
+            <p>Según la información proporcionada, este tratamiento puede no ser adecuado para ti en este momento.</p>
+            <p>Tu seguridad es nuestra prioridad. Te recomendamos consultar con un especialista.</p>
+            <button class="button button-full" type="button" onclick="goHome()">Volver al inicio</button>
+          </div>
+        </section>
+      `;
+    }
+
+    function escapeHTML(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function hasBotSignal(ids = []) {
+      return ids.some((id) => Boolean(document.querySelector(`#${id}`)?.value.trim()));
+    }
+
+    function canSubmitNow() {
+      const now = Date.now();
+      if (now - lastSubmissionAt < 1200) return false;
+      lastSubmissionAt = now;
+      return true;
+    }
+
+    function mexicanStatesOptions(selected = "") {
+      const states = [
+        "Ciudad de México",
+        "Estado de México",
+        "Jalisco",
+        "Nuevo León",
+        "Puebla",
+        "Querétaro",
+        "Guanajuato",
+        "Veracruz",
+        "Yucatán",
+        "Baja California",
+        "Chihuahua",
+        "Coahuila",
+        "Guerrero",
+        "Hidalgo",
+        "Michoacán",
+        "Morelos",
+        "Nayarit",
+        "Oaxaca",
+        "Quintana Roo",
+        "San Luis Potosí",
+        "Sinaloa",
+        "Sonora",
+        "Tabasco",
+        "Tamaulipas",
+        "Tlaxcala",
+        "Zacatecas",
+        "Aguascalientes",
+        "Campeche",
+        "Chiapas"
+      ];
+
+      return `<option value="">Selecciona tu estado</option>${states.map((state) => (
+        `<option ${state === selected ? "selected" : ""}>${state}</option>`
+      )).join("")}`;
+    }
+
+    function renderMedicalReviewScreen() {
+      const formData = window.formData;
+      setFinalProgress("Evaluación completada");
+      const nameParts = (answers.fullName || "").trim().split(/\s+/).filter(Boolean);
+      const firstName = formData.nombre || nameParts[0] || "";
+      const lastName = formData.apellido || nameParts.slice(1).join(" ") || "";
+      app.innerHTML = `
+        <section class="resultado aprobado">
+          <div class="card result-card">
+            <div class="result-hero">
+              <p class="eyebrow">DERMÁTIKA</p>
+              <span class="result-kicker">Evaluación completada</span>
+              <h1>Lista para revisión médica</h1>
+              <p>Tu información indica que podrías continuar con una valoración médica personalizada para tratamiento de acné.</p>
+            </div>
+
+            <div class="review-card">
+              <h2>Tu revisión médica</h2>
+              <div class="review-grid">
+                <div class="review-item">
+                  <span>Tipo de acné</span>
+                  <strong>${escapeHTML(formData.acne || "No especificado")}</strong>
+                </div>
+                <div class="review-item">
+                  <span>Tiempo con acné</span>
+                  <strong>${escapeHTML(formData.tiempo || "No especificado")}</strong>
+                </div>
+                <div class="review-item">
+                  <span>Zonas afectadas</span>
+                  <strong>${escapeHTML(formData.zonas || "No especificado")}</strong>
+                </div>
+                <div class="review-item">
+                  <span>Nivel estimado</span>
+                  <strong>${escapeHTML(formData.acne || "Por confirmar")}</strong>
+                </div>
+              </div>
+              <p class="ok-note">Eres candidato a revisión médica para tratamiento dermatológico personalizado.</p>
+            </div>
+
+            <form class="fields identity-panel" onsubmit="goToContact(event)" novalidate>
+              <h2>Procedamos a comprobar tu elegibilidad</h2>
+              <div class="field">
+                <label for="identityName">Nombre</label>
+                <input id="identityName" name="nombre" type="text" autocomplete="given-name" value="${escapeHTML(firstName)}" required>
+                <span class="field-error" data-lead-error="identityName"></span>
+              </div>
+              <div class="field">
+                <label for="identityLastName">Apellido</label>
+                <input id="identityLastName" name="apellido" type="text" autocomplete="family-name" value="${escapeHTML(lastName)}" required>
+                <span class="field-error" data-lead-error="identityLastName"></span>
+              </div>
+              <div class="field">
+                <label for="estado">Estado</label>
+                <select id="estado" name="estado" required>
+                  ${mexicanStatesOptions(formData.estado || "")}
+                </select>
+                <span class="field-error" data-lead-error="estado"></span>
+              </div>
+              <p class="secure-note">Tu información será utilizada únicamente con fines médicos y de seguimiento dermatológico.</p>
+              <button class="button button-full" type="submit">Siguiente</button>
+            </form>
+          </div>
+        </section>
+      `;
+    }
+
+    function mostrarPantallaAprobado() {
+      renderMedicalReviewScreen();
+    }
+
+    function renderContactStep() {
+      const formData = window.formData;
+      setFinalProgress("Evaluación completada");
+      app.innerHTML = `
+        <section class="contacto">
+          <div class="card result-card">
+            <div class="contact-hero">
+              <p class="eyebrow">DERMÁTIKA</p>
+              <h1>${escapeHTML(formData.nombre || "Hola")}, ¿cómo podemos contactarte si es necesario?</h1>
+              <p>Nuestro equipo médico podrá usar estos datos para dar seguimiento a tu evaluación.</p>
+            </div>
+
+            <form class="fields identity-panel" onsubmit="submitLead(event)" novalidate>
+              <div class="bot-field" aria-hidden="true">
+                <label for="leadWebsite">Sitio web</label>
+                <input id="leadWebsite" name="website" type="text" tabindex="-1" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="leadEmail">Correo electrónico</label>
+                <input id="leadEmail" name="correo" type="email" autocomplete="email" maxlength="96" value="${escapeHTML(formData.correo || answers.email || "")}" required>
+                <span class="field-error" data-lead-error="leadEmail"></span>
+              </div>
+              <div class="field">
+                <label for="leadWhatsapp">WhatsApp</label>
+                <input id="leadWhatsapp" name="whatsapp" type="tel" inputmode="numeric" autocomplete="tel" maxlength="15" value="${escapeHTML(formData.whatsapp || answers.whatsapp || "")}" required>
+                <span class="field-error" data-lead-error="leadWhatsapp"></span>
+              </div>
+              <label class="check-field">
+                <input id="privacyAccepted" type="checkbox" required>
+                <span>He leído y acepto el aviso de privacidad.</span>
+              </label>
+              <div class="privacy-actions">
+                <button class="privacy-link" type="button" onclick="openPrivacyModal()">Leer aviso de privacidad</button>
+              </div>
+              <span class="field-error" data-lead-error="privacyAccepted"></span>
+
+              <button class="button button-full" type="submit" id="contactSubmitButton" disabled>Comprobar elegibilidad</button>
+            </form>
+          </div>
+        </section>
+        ${privacyModalMarkup()}
+      `;
+      document.querySelector("#privacyAccepted")?.addEventListener("change", updateContactSubmitState);
+      updateContactSubmitState();
+    }
+
+    function validateLeadField(input) {
+      const value = input.value.trim();
+      if (!value) return "Campo obligatorio.";
+      if ((input.id === "identityName" || input.id === "identityLastName") && !/^[a-zA-ZÀ-ÿ\s'.-]+$/.test(value)) return "Usa solo letras.";
+      if (input.id === "estado" && !value) return "Selecciona tu estado.";
+      if (input.id === "leadWhatsapp" && !/^\d+$/.test(value)) return "Usa solo números.";
+      if (input.id === "leadWhatsapp" && (value.length < 10 || value.length > 15)) return "Ingresa un número válido.";
+      if (input.id === "leadEmail" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Correo no válido.";
+      return "";
+    }
+
+    function updateContactSubmitState() {
+      const submit = document.querySelector("#contactSubmitButton");
+      const privacyAccepted = document.querySelector("#privacyAccepted")?.checked;
+      if (submit) submit.disabled = !privacyAccepted;
+    }
+
+    function privacyModalMarkup() {
+      return `
+        <div class="privacy-modal" id="privacyModal" role="dialog" aria-modal="true" aria-labelledby="privacyTitle">
+          <div class="privacy-dialog">
+            <header>
+              <div>
+                <p class="eyebrow">Aviso de privacidad</p>
+                <h2 id="privacyTitle">Información protegida y confidencial</h2>
+              </div>
+              <button class="privacy-close" type="button" aria-label="Cerrar aviso de privacidad" onclick="closePrivacyModal()">×</button>
+            </header>
+            <div class="privacy-content">
+              <p>Tu información será utilizada únicamente con fines médicos y de seguimiento dermatológico.</p>
+              <p>DERMÁTIKA protege y resguarda los datos personales mediante procesos confidenciales y seguros.</p>
+              <div class="privacy-points">
+                <span>Protección de datos personales</span>
+                <span>Uso confidencial de información</span>
+                <span>Uso exclusivo médico</span>
+                <span>Protección de información sensible</span>
+                <span>Seguridad digital</span>
+                <span>Datos no compartidos públicamente</span>
+              </div>
+              <p>La información proporcionada es utilizada exclusivamente para evaluación y seguimiento dermatológico.</p>
+              <p>No compartimos información personal con terceros ajenos al proceso médico.</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function openPrivacyModal() {
+      document.querySelector("#privacyModal")?.classList.add("is-open");
+      document.body.style.overflow = "hidden";
+    }
+
+    function closePrivacyModal() {
+      document.querySelector("#privacyModal")?.classList.remove("is-open");
+      document.body.style.overflow = "";
+    }
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closePrivacyModal();
+    });
+
+    document.addEventListener("click", (event) => {
+      const modal = document.querySelector("#privacyModal.is-open");
+      if (modal && event.target === modal) closePrivacyModal();
+    });
+
+    function goToContact(e) {
+      e.preventDefault();
+      const inputs = [
+        document.querySelector("#identityName"),
+        document.querySelector("#identityLastName"),
+        document.querySelector("#estado")
+      ];
+      let isValid = true;
+
+      inputs.forEach((input) => {
+        const message = validateLeadField(input);
+        const error = document.querySelector(`[data-lead-error="${input.id}"]`);
+        if (error) error.textContent = message;
+        if (message) isValid = false;
+      });
+
+      if (!isValid) return;
+
+      window.formData = {
+        ...window.formData,
+        nombre: document.querySelector("#identityName").value.trim(),
+        apellido: document.querySelector("#identityLastName").value.trim(),
+        estado: document.querySelector("#estado").value.trim()
+      };
+      submitEvaluation(window.formData);
+
+      renderContactStep();
+    }
+
+    function submitLead(e) {
+      e.preventDefault();
+      if (hasBotSignal(["leadWebsite"])) return;
+      const inputs = Array.from(e.target.querySelectorAll("input")).filter((input) => input.id !== "leadWebsite");
+      let isValid = true;
+
+      inputs.forEach((input) => {
+        if (input.type === "checkbox") return;
+        if (input.id === "leadWhatsapp") input.value = input.value.replace(/\D/g, "");
+        const message = validateLeadField(input);
+        const error = document.querySelector(`[data-lead-error="${input.id}"]`);
+        if (error) error.textContent = message;
+        if (message) isValid = false;
+      });
+
+      const privacyAccepted = document.querySelector("#privacyAccepted")?.checked;
+      const privacyError = document.querySelector('[data-lead-error="privacyAccepted"]');
+      if (privacyError) privacyError.textContent = privacyAccepted ? "" : "Para continuar, confirma que leíste y aceptas el aviso de privacidad.";
+      if (!privacyAccepted) isValid = false;
+
+      if (!isValid) return;
+      if (!canSubmitNow()) return;
+
+      window.formData = {
+        ...window.formData,
+        correo: document.querySelector("#leadEmail").value.trim(),
+        whatsapp: document.querySelector("#leadWhatsapp").value.trim(),
+        acepta_privacidad: true
+      };
+
+      submitEvaluation(window.formData);
+      ANALYTICS.track("lead_contact_complete", { email: window.formData.correo ? "present" : "missing" });
+      renderPostEligibilityPage();
+    }
+
+    function getMedicalPriority() {
+      const acne = (window.formData.acne || "").toLowerCase();
+      if (acne.includes("severo")) return "Alta";
+      if (acne.includes("moderado")) return "Moderada";
+      return "Inicial";
+    }
+
+    function getRecommendedPlan() {
+      const acne = String(
+        window.formData?.acne ||
+        window.formData?.acneSeverity ||
+        window.formData?.answers?.acneSeverity ||
+        ""
+      ).toLowerCase();
+
+      if (acne.includes("severo")) {
+        return plans.elite;
+      }
+
+      if (acne.includes("moderado")) {
+        return plans.avanzado;
+      }
+
+      if (acne.includes("leve")) {
+        return plans.esencial;
+      }
+
+      return {
+        ...plans.avanzado,
+        reason: "Como aún no estás seguro del nivel de acné, recomendamos una revisión más completa para definir el mejor protocolo."
+      };
+    }
+
+    function renderPostEligibilityPage() {
+      const formData = window.formData;
+      const priority = getMedicalPriority();
+      const recommended = getRecommendedPlan();
+      setFinalProgress("Aprobación preliminar");
+      app.innerHTML = `
+        <section class="post-eligibility">
+          <div class="approval-bar">
+            <span>APROBACIÓN PRELIMINAR DE ${escapeHTML(formData.nombre || "PACIENTE")} VÁLIDA POR</span>
+            <span class="approval-countdown" id="approvalCountdown">10:55</span>
+          </div>
+
+          <div class="post-hero reveal-post">
+            <p class="eyebrow">DERMÁTIKA</p>
+            <h1>¡${escapeHTML(formData.nombre || "Tu evaluación")}, tu evaluación está lista!</h1>
+            <p>Con base en tus respuestas, puedes continuar con una revisión médica personalizada para tratamiento de acné.</p>
+          </div>
+
+          <section class="post-section reveal-post">
+            <div class="case-summary">
+              <article><span>Tipo de acné</span><strong>${escapeHTML(formData.acne || "No especificado")}</strong></article>
+              <article><span>Tiempo con acné</span><strong>${escapeHTML(formData.tiempo || "No especificado")}</strong></article>
+              <article><span>Zonas afectadas</span><strong>${escapeHTML(formData.zonas || "No especificado")}</strong></article>
+              <article><span>Prioridad médica</span><strong>${priority}</strong></article>
+            </div>
+          </section>
+
+          <section class="post-section recommendation reveal-post">
+            <div>
+              <span class="post-badge">Revisión médica requerida</span>
+              <h2>Nuestra recomendación</h2>
+              <p>Basándonos en tu evaluación, recomendamos iniciar con un protocolo dermatológico personalizado para controlar brotes, inflamación y prevenir nuevas lesiones.</p>
+              <div class="trust-box">Cada protocolo es revisado y supervisado por profesionales médicos. DERMÁTIKA trabaja con protocolos dermatológicos personalizados.</div>
+            </div>
+            <img src="assets/product-neotrex-professional.png" alt="Tratamiento dermatológico guiado profesionalmente" loading="lazy" decoding="async">
+          </section>
+
+          <section class="post-section reveal-post">
+            <p class="post-label">Objetivos del plan</p>
+            <h2>Lo que buscamos lograr con tu tratamiento</h2>
+            <div class="goal-grid">
+              <article class="goal-card reveal-post">Controlar brotes activos</article>
+              <article class="goal-card reveal-post">Disminuir inflamación</article>
+              <article class="goal-card reveal-post">Prevenir nuevos brotes</article>
+              <article class="goal-card reveal-post">Guiarte con una rutina clara de skincare</article>
+              <article class="goal-card reveal-post">Dar seguimiento médico durante el proceso</article>
+            </div>
+          </section>
+
+          <section class="post-section plan-visual reveal-post">
+            <div class="plan-image-card">
+              <img src="assets/process-treatment.png" alt="Kit de tratamiento dermatológico personalizado DERMÁTIKA" loading="lazy" decoding="async">
+            </div>
+            <div class="plan-visual-copy">
+              <p class="post-label">Tu plan</p>
+              <h2>Tu plan personalizado</h2>
+              <p>Obtendrás una evaluación médica, protocolo dermatológico y seguimiento para iniciar de forma segura.</p>
+            </div>
+          </section>
+
+          <section class="post-section reveal-post">
+            <p class="post-label">Incluye</p>
+            <h2>¿Qué está incluido?</h2>
+            <div class="include-grid">
+              <article class="include-card">Evaluación médica online</article>
+              <article class="include-card">Revisión de tu caso</article>
+              <article class="include-card">Protocolo personalizado</article>
+              <article class="include-card">Tratamiento dermatológico guiado profesionalmente</article>
+              <article class="include-card">Rutina de skincare sugerida</article>
+              <article class="include-card">Seguimiento paso a paso</article>
+              <article class="include-card">Envío de tratamiento aprobado a domicilio</article>
+            </div>
+            <p class="include-note">La rutina de skincare se indica como guía de uso y productos sugeridos; no incluye envío de skincare.</p>
+          </section>
+
+          <section class="post-section reveal-post">
+            <p class="post-label">Próximo proceso</p>
+            <h2>¿Qué sucede después?</h2>
+            <div class="interactive-timeline">
+              ${[
+                ["Pago del plan elegido", "Realizas el pago para continuar con la revisión médica."],
+                ["Revisión médica", "Un médico analiza tu evaluación y confirma el protocolo adecuado."],
+                ["Confirmación del tratamiento", "Si eres candidato, se define el tratamiento oral y la guía de skincare."],
+                ["Envío a domicilio", "Recibes tu tratamiento aprobado directamente en casa."],
+                ["Seguimiento", "Te guiamos paso a paso durante tu proceso."]
+              ].map((step, index) => `
+                <article class="timeline-panel ${index === 0 ? "is-open" : ""}">
+                  <button class="timeline-toggle" type="button" onclick="toggleTimeline(${index})"><span>0${index + 1}</span>${step[0]}</button>
+                  <div class="timeline-content">${step[1]}</div>
+                </article>
+              `).join("")}
+            </div>
+          </section>
+
+          <section class="post-section plans-premium-section reveal-post" id="planes">
+            <p class="post-label">Planes</p>
+            <div class="plans-premium-header">
+              <h2>Elige el nivel de acompañamiento para tu tratamiento</h2>
+              <p>Cada plan incluye evaluación médica, seguimiento dermatológico y protocolo personalizado.</p>
+              <span class="plans-decision-note">La recomendación inicial se basa en tu evaluación, pero tú decides qué nivel de atención prefieres.</span>
+            </div>
+          </section>
+
+          <section class="post-section recommended-plan reveal-post">
+            <div>
+              <p class="post-label">Recomendación basada en tu evaluación</p>
+              <h2>Según tus respuestas, este plan podría adaptarse mejor a tu caso.</h2>
+              <p class="plans-intro">Esta recomendación es una guía inicial. Puedes elegir el plan que mejor se ajuste a tus necesidades.</p>
+            </div>
+            <article class="recommended-card">
+              <span class="plan-badge">Recomendado para tu caso</span>
+              <h3>Plan ${recommended.plan}</h3>
+              <div class="recommended-meta">
+                <span>Marca asociada<strong>${recommended.medication}</strong></span>
+                <span>Precio<strong>$${recommended.price.toLocaleString("es-MX")} MXN</strong></span>
+              </div>
+              <p>${recommended.reason}</p>
+              <button class="button button-full" type="button" onclick="selectPlan('${recommended.plan}', ${recommended.price}, '${recommended.medication}')">Elegir plan recomendado</button>
+            </article>
+          </section>
+
+          <section class="post-section plans-premium-section reveal-post">
+            <p class="post-label">Planes disponibles</p>
+            <h2>Compara y elige tu nivel de acompañamiento</h2>
+            <div class="plans-grid">
+              ${renderPlanCard("Esencial", 1590, "Base clínica", [
+                "Evaluación médica",
+                "Rutina básica skincare",
+                "Indicaciones personalizadas",
+                "Seguimiento inicial",
+                "Guía de cuidado"
+              ], false, "Neotrex", recommended.plan)}
+              ${renderPlanCard("Avanzado", 1890, "Más elegido", [
+                "Evaluación médica",
+                "Rutina avanzada",
+                "Ajustes según evolución",
+                "Seguimiento prioritario",
+                "Control de brotes"
+              ], true, "Vastionin", recommended.plan)}
+              ${renderPlanCard("Elite", 2690, "Mayor resultado", [
+                "Evaluación médica prioritaria",
+                "Rutina premium personalizada",
+                "Seguimiento continuo",
+                "Ajustes completos",
+                "Mayor acompañamiento",
+                "Atención preferente"
+              ], false, "Epuris", recommended.plan)}
+            </div>
+          </section>
+
+          <div id="checkoutMount"></div>
+
+          <section class="post-section urgency-card reveal-post">
+            <div>
+              <h2>Tu aprobación preliminar estará disponible por tiempo limitado</h2>
+              <p>Guarda tu lugar para que tu caso pueda pasar a revisión médica.</p>
+            </div>
+            <a class="button" href="#planes">Continuar con mi plan</a>
+          </section>
+
+          <section class="post-section reveal-post">
+            <p class="post-label">Preguntas frecuentes</p>
+            <h2>Antes de continuar</h2>
+            ${[
+              ["¿Qué significa esta etapa?", "Tu evaluación fue diseñada para identificar candidatos adecuados al tratamiento y dar paso a una revisión médica personalizada."],
+              ["¿Cómo se define mi protocolo?", "DERMÁTIKA trabaja con protocolos dermatológicos personalizados según tu caso, historial y necesidades de seguimiento."],
+              ["¿El skincare viene incluido?", "Recibes una guía clara con productos sugeridos y modo de uso; el envío corresponde al tratamiento dermatológico definido para tu proceso."],
+              ["¿Cuándo recibo mi tratamiento?", "Después de completar tu plan, el equipo coordina la preparación del protocolo y el envío correspondiente."]
+            ].map((item, index) => `
+              <article class="faq-item ${index === 0 ? "is-open" : ""}">
+                <button class="faq-question" type="button" onclick="toggleFAQ(${index})">${item[0]}</button>
+                <div class="faq-answer">${item[1]}</div>
+              </article>
+            `).join("")}
+          </section>
+        </section>
+      `;
+
+      startApprovalCountdown();
+      revealOnScroll();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function renderPlanCard(name, price, badge, items, featured = false, medication = "", recommendedPlan = "") {
+      const isRecommended = name === recommendedPlan;
+      const planKey = name.toLowerCase();
+      const planCopy = {
+        esencial: "Ideal para personas con acné leve o primeros brotes.",
+        avanzado: "Mayor acompañamiento y control del tratamiento.",
+        elite: "Tratamiento dermatológico más completo y personalizado."
+      };
+      const differentiator = {
+        esencial: "Inicio profesional",
+        avanzado: "Más recomendado",
+        elite: "Máximo nivel"
+      };
+      return `
+        <article class="plan-card is-${planKey} ${featured ? "is-featured" : ""} ${isRecommended ? "is-recommended" : ""}" data-plan="${name}">
+          ${name === "Avanzado" ? `<span class="plan-ribbon">Recomendado</span>` : ""}
+          <div class="plan-topline">
+            ${badge ? `<span class="plan-tier-badge">${badge}</span>` : ""}
+            ${isRecommended ? `<span class="plan-badge">Recomendado para ti</span>` : ""}
+          </div>
+          <h3>Plan ${name}</h3>
+          <div class="plan-medication">
+            <span>Medicamento asignado</span>
+            <strong class="medication-name">${medication}</strong>
+          </div>
+          <div class="plan-price">$${price.toLocaleString("es-MX")} MXN <small>Pago del plan</small></div>
+          <p class="plan-copy">${planCopy[planKey]}</p>
+          <span class="plan-differentiator">${differentiator[planKey]}</span>
+          <ul>${items.map((item) => `<li>${item}</li>`).join("")}</ul>
+          <button class="button button-full" type="button" onclick="selectPlan('${name}', ${price}, '${medication}')">Elegir Plan ${name}</button>
+        </article>
+      `;
+    }
+
+    function startApprovalCountdown() {
+      if (approvalTimer) clearInterval(approvalTimer);
+      let remaining = 10 * 60 + 55;
+      const countdown = document.querySelector("#approvalCountdown");
+      const update = () => {
+        const minutes = String(Math.floor(remaining / 60)).padStart(2, "0");
+        const seconds = String(remaining % 60).padStart(2, "0");
+        if (countdown) countdown.textContent = `${minutes}:${seconds}`;
+        if (remaining > 0) remaining -= 1;
+      };
+      update();
+      approvalTimer = setInterval(update, 1000);
+    }
+
+    function selectPlan(planName, price, medication) {
+      const legacyPlan = price === undefined ? legacyPlanAliases[String(planName || "").toLowerCase()] : null;
+      if (legacyPlan) {
+        planName = legacyPlan.plan;
+        price = legacyPlan.price;
+        medication = legacyPlan.medication;
+      }
+
+      window.formData = {
+        ...window.formData,
+        selectedPlan: planName,
+        selectedPrice: price,
+        selectedMedication: medication
+      };
+
+      document.querySelectorAll(".plan-card").forEach((card) => {
+        card.classList.toggle("is-selected", card.dataset.plan === planName);
+      });
+
+      renderCheckoutSection();
+      ANALYTICS.track("select_plan", getCurrentPlanPayload());
+      document.querySelector("#checkout")?.scrollIntoView({ behavior: "smooth" });
+    }
+
+    function toggleTimeline(index) {
+      const panels = document.querySelectorAll(".timeline-panel");
+      const target = panels[index];
+      if (target) target.classList.toggle("is-open");
+    }
+
+    function toggleFAQ(index) {
+      const items = document.querySelectorAll(".faq-item");
+      const target = items[index];
+      if (target) target.classList.toggle("is-open");
+    }
+
+    function renderCheckoutSection() {
+      const formData = window.formData;
+      const checkoutMount = document.querySelector("#checkoutMount");
+      if (!checkoutMount) return;
+      const theme = getCheckoutTheme();
+
+      checkoutMount.innerHTML = `
+        <section class="post-section reveal-post checkout ${theme.cardClass}" id="checkout">
+          <p class="post-label">Checkout seguro</p>
+          <div class="checkout-head">
+            <h2>Continúa con tu revisión médica</h2>
+            <span class="checkout-badge">${theme.label}</span>
+          </div>
+          <div class="checkout-grid">
+            <aside class="checkout-summary">
+              <span>Tu plan seleccionado</span>
+              <strong>Plan ${escapeHTML(formData.selectedPlan)}</strong>
+              <p><strong>Medicamento:</strong> ${escapeHTML(formData.selectedMedication)}</p>
+              <p><strong>Total:</strong> $${Number(formData.selectedPrice || 0).toLocaleString("es-MX")} MXN</p>
+              <p>DERMÁTIKA trabaja con procesos de pago externos para mantener una experiencia segura, moderna y confidencial.</p>
+            </aside>
+
+            <form class="checkout-form" id="paymentForm" onsubmit="goToPayment(event)" novalidate>
+              <div class="bot-field" aria-hidden="true">
+                <label for="checkoutWebsite">Sitio web</label>
+                <input id="checkoutWebsite" name="website" type="text" tabindex="-1" autocomplete="off">
+              </div>
+              <div class="field field-full">
+                <label for="shipFullName">Nombre completo</label>
+                <input id="shipFullName" autocomplete="name" maxlength="90" value="${escapeHTML(`${formData.nombre || ""} ${formData.apellido || ""}`.trim())}" required>
+                <span class="field-error" data-checkout-error="shipFullName"></span>
+              </div>
+              <div class="field">
+                <label for="shipEmail">Correo electrónico</label>
+                <input id="shipEmail" type="email" autocomplete="email" maxlength="96" value="${escapeHTML(formData.correo || "")}" required>
+                <span class="field-error" data-checkout-error="shipEmail"></span>
+              </div>
+              <div class="field">
+                <label for="shipWhatsapp">WhatsApp</label>
+                <input id="shipWhatsapp" inputmode="numeric" autocomplete="tel" maxlength="15" value="${escapeHTML(formData.whatsapp || "")}" required>
+                <span class="field-error" data-checkout-error="shipWhatsapp"></span>
+              </div>
+              <div class="field field-full">
+                <label for="shipAddress1">Dirección línea 1</label>
+                <input id="shipAddress1" autocomplete="address-line1" maxlength="140" required>
+                <span class="field-error" data-checkout-error="shipAddress1"></span>
+              </div>
+              <div class="field field-full">
+                <label for="shipAddress2">Dirección línea 2 opcional</label>
+                <input id="shipAddress2" autocomplete="address-line2" maxlength="140">
+                <span class="field-error" data-checkout-error="shipAddress2"></span>
+              </div>
+              <div class="field">
+                <label for="shipCity">Ciudad</label>
+                <input id="shipCity" autocomplete="address-level2" maxlength="80" required>
+                <span class="field-error" data-checkout-error="shipCity"></span>
+              </div>
+              <div class="field">
+                <label for="shipState">Estado</label>
+                <select id="shipState" required>${mexicanStatesOptions(formData.estado || "")}</select>
+                <span class="field-error" data-checkout-error="shipState"></span>
+              </div>
+              <div class="field">
+                <label for="shipZip">Código postal</label>
+                <input id="shipZip" inputmode="numeric" autocomplete="postal-code" maxlength="5" required>
+                <span class="field-error" data-checkout-error="shipZip"></span>
+              </div>
+              <p class="payment-note">Información de pago: completarás el pago en una pasarela externa segura para proteger tus datos y mantener tu información resguardada.</p>
+              <div class="stripe-payment-panel" id="stripePaymentPanel" aria-live="polite">
+                <div>
+                  <h3>Pago protegido</h3>
+                  <p>Los datos de pago se procesan en campos seguros de Stripe. DERMÁTIKA no almacena datos completos de tarjeta.</p>
+                </div>
+                <div class="stripe-element-box is-loading" id="expressCheckoutElement">Preparando opciones de pago...</div>
+                <div class="wallet-placeholder" id="walletFallback" hidden>Si no ves Apple Pay o Google Pay, usa tarjeta debajo.</div>
+                <div class="stripe-element-box is-loading" id="paymentElement">Preparando pago seguro...</div>
+                <div class="payment-error" id="paymentError"></div>
+                <div class="payment-success" id="paymentInlineSuccess"></div>
+                <div class="payment-success" id="paymentSuccess"></div>
+              </div>
+              <div class="payment-status" id="checkoutPaymentStatus" role="status" aria-live="polite"></div>
+              <button class="button button-full" id="paymentSubmitButton" type="submit">Pagar ahora</button>
+            </form>
+          </div>
+        </section>
+
+        <section class="post-section reveal-post">
+          <p class="post-label">Testimonios</p>
+          <h2>Pacientes que empezaron como tú</h2>
+          <div class="testimonial-mini-grid">
+            <article class="testimonial-mini">“Probé muchos productos sin resultados. Con el protocolo entendí qué necesitaba mi piel.”<strong>Paciente verificado</strong></article>
+            <article class="testimonial-mini">“Me gustó que todo fue claro, desde la evaluación hasta el seguimiento.”<strong>Paciente verificado</strong></article>
+            <article class="testimonial-mini">“Sentí confianza porque no me vendieron cualquier cosa; primero revisaron mi caso.”<strong>Paciente verificado</strong></article>
+          </div>
+        </section>
+      `;
+
+      revealOnScroll();
+    }
+
+    function showPaymentStatus(message) {
+      const status = document.querySelector("#checkoutPaymentStatus");
+      if (!status) return;
+      status.textContent = message;
+      status.classList.add("is-visible");
+    }
+
+    function showPaymentError(message) {
+      const error = document.querySelector("#paymentError");
+      if (error) error.textContent = message || "";
+      if (message) showPaymentStatus(message);
+    }
+
+    function setPaymentLoading(isLoading, message = "Procesando pago seguro...") {
+      const button = document.querySelector("#paymentSubmitButton");
+      if (!button) return;
+      button.disabled = isLoading;
+      button.textContent = isLoading ? message : (stripeState.isReady ? "Confirmar pago seguro" : "Pagar ahora");
+    }
+
+    async function initializeStripePayment() {
+      const panel = document.querySelector("#stripePaymentPanel");
+      const paymentHost = document.querySelector("#paymentElement");
+      const expressHost = document.querySelector("#expressCheckoutElement");
+      const planPayload = getCurrentPlanPayload();
+      const planKey = planPayload.plan_key;
+      if (stripeState.isReady && stripeState.elements && stripeState.planKey === planKey) return true;
+      if (!panel || !paymentHost) return false;
+
+      panel.classList.add("is-visible");
+      showPaymentStatus("Preparando pago seguro...");
+      showPaymentError("");
+      paymentHost.classList.add("is-loading");
+      paymentHost.textContent = "Preparando pago seguro...";
+      if (expressHost) {
+        expressHost.classList.add("is-loading");
+        expressHost.textContent = "Preparando opciones de pago...";
+      }
+
+      const shipping = window.formData?.shipping || {};
+      const body = {
+        planKey,
+        amount: Number(planPayload.amount || 0),
+        currency: "MXN",
+        email: window.formData?.correo || shipping.shipEmail || "",
+        patientName: shipping.shipFullName || `${window.formData?.nombre || ""} ${window.formData?.apellido || ""}`.trim(),
+        phone: window.formData?.whatsapp || shipping.shipWhatsapp || "",
+        patientReference: ensureInternalFolio(),
+        externalReference: ensureInternalFolio(),
+        sessionId: ensureInternalFolio(),
+        shippingPostalCode: shipping.shipZip || "",
+        turnstileToken: document.querySelector("#turnstileToken")?.value || ""
+      };
+
+      try {
+        let response = await fetch(apiUrl(STRIPE_PAYMENTS.createIntentEndpoint), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        if (!response.ok) {
+          response = await fetch(apiUrl(STRIPE_PAYMENTS.fallbackCreateIntentEndpoint), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+          });
+        }
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.clientSecret || !result.publishableKey) {
+          throw new Error(result.error || result.detail || "stripe_not_ready");
+        }
+        if (!window.Stripe) throw new Error("stripe_js_not_loaded");
+
+        try {
+          localStorage.setItem("dermatika_stripe_public_key", result.publishableKey);
+        } catch (error) {
+          reportIntegrationIssue("No se pudo guardar public key local", error);
+        }
+
+        stripeState.stripe = window.Stripe(result.publishableKey);
+        stripeState.clientSecret = result.clientSecret;
+        stripeState.paymentIntentId = result.paymentIntentId || "";
+        stripeState.planKey = planKey;
+        stripeState.elements = stripeState.stripe.elements({
+          clientSecret: result.clientSecret,
+          appearance: {
+            theme: "stripe",
+            variables: {
+              colorPrimary: "#4AAFC0",
+              colorText: "#0F1B2D",
+              colorBackground: "#FFFFFF",
+              borderRadius: "16px",
+              fontFamily: "Inter, system-ui, sans-serif"
+            }
+          }
+        });
+
+        if (expressHost) {
+          try {
+            expressHost.replaceChildren();
+            expressHost.classList.remove("is-loading");
+            const expressCheckout = stripeState.elements.create("expressCheckout", {
+              buttonTheme: { applePay: "black", googlePay: "black" },
+              buttonType: { applePay: "plain", googlePay: "plain" }
+            });
+            expressCheckout.mount("#expressCheckoutElement");
+            expressCheckout.on("confirm", async () => {
+              await confirmStripePayment("Confirmando pago...");
+            });
+          } catch (error) {
+            expressHost.hidden = true;
+            document.querySelector("#walletFallback")?.removeAttribute("hidden");
+            reportIntegrationIssue("Express checkout no disponible", error);
+          }
+        }
+
+        paymentHost.replaceChildren();
+        paymentHost.classList.remove("is-loading");
+        const paymentElement = stripeState.elements.create("payment", {
+          layout: "tabs",
+          defaultValues: {
+            billingDetails: {
+              name: body.patientName,
+              email: body.email,
+              phone: body.phone
+            }
+          }
+        });
+        paymentElement.mount("#paymentElement");
+        stripeState.isReady = true;
+        showPaymentStatus("Pago seguro listo. Revisa tus datos y confirma para continuar.");
+        setPaymentLoading(false);
+        return true;
+      } catch (error) {
+        stripeState.isReady = false;
+        paymentHost.classList.remove("is-loading");
+        paymentHost.textContent = "No se pudieron cargar los campos de pago seguro.";
+        showPaymentError("El pago seguro no está disponible en este momento. Tu evaluación quedó guardada para seguimiento.");
+        setPaymentLoading(false);
+        reportIntegrationIssue("Stripe init error", error);
+        return false;
+      }
+    }
+
+    async function confirmStripePayment(loadingMessage = "Procesando pago seguro...") {
+      if (!stripeState.stripe || !stripeState.elements || !stripeState.clientSecret) {
+        showPaymentError("El pago seguro aún se está preparando. Intenta de nuevo en unos segundos.");
+        return false;
+      }
+      setPaymentLoading(true, loadingMessage);
+      showPaymentError("");
+      try {
+        const submitResult = await stripeState.elements.submit();
+        if (submitResult?.error) throw submitResult.error;
+        const { error, paymentIntent } = await stripeState.stripe.confirmPayment({
+          elements: stripeState.elements,
+          clientSecret: stripeState.clientSecret,
+          confirmParams: {
+            return_url: `${window.location.origin}${window.location.pathname}?payment_status=succeeded`
+          },
+          redirect: "if_required"
+        });
+        if (error) throw error;
+        if (paymentIntent?.status === "succeeded") {
+          await submitIntake(paymentIntent.id || stripeState.paymentIntentId || "");
+          ANALYTICS.track("purchase", {
+            ...getCurrentPlanPayload(),
+            transaction_id: paymentIntent.id || stripeState.paymentIntentId || ensureInternalFolio(),
+            value: Number(window.formData?.selectedPrice || 0),
+            currency: "MXN"
+          });
+          ANALYTICS.track("payment_success", getCurrentPlanPayload());
+          renderThankYouPage();
+          return true;
+        }
+        showPaymentStatus("Tu pago quedó en revisión con la pasarela. Te contactaremos si se requiere confirmación adicional.");
+        setPaymentLoading(false);
+        return false;
+      } catch (error) {
+        showPaymentError(error?.message || "No pudimos confirmar el pago. Revisa el método o intenta nuevamente.");
+        setPaymentLoading(false);
+        reportIntegrationIssue("Stripe confirm error", error);
+        return false;
+      }
+    }
+
+    function validateCheckoutField(input) {
+      const value = input.value.trim();
+      if (!value && input.id !== "shipAddress2") return "Campo obligatorio.";
+      if (input.id === "shipEmail" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Correo no válido.";
+      if (input.id === "shipWhatsapp" && !/^\d+$/.test(value)) return "Usa solo números.";
+      if (input.id === "shipWhatsapp" && (value.length < 10 || value.length > 15)) return "Ingresa un número válido.";
+      if (input.id === "shipZip" && !/^\d+$/.test(value)) return "Usa solo números.";
+      if (input.id === "shipZip" && value.length !== 5) return "Ingresa 5 dígitos.";
+      return "";
+    }
+
+    function saveLeadData() {
+      const fields = ["shipFullName", "shipEmail", "shipWhatsapp", "shipAddress1", "shipAddress2", "shipCity", "shipState", "shipZip"];
+      window.formData = {
+        ...window.formData,
+        shipping: Object.fromEntries(fields.map((id) => [id, document.querySelector(`#${id}`)?.value.trim() || ""]))
+      };
+      submitEvaluation(window.formData);
+    }
+
+    async function goToPayment(e) {
+      if (e) e.preventDefault();
+      if (hasBotSignal(["checkoutWebsite"])) return;
+      const inputs = Array.from(document.querySelectorAll("#checkout input, #checkout select")).filter((input) => input.id !== "checkoutWebsite");
+      let isValid = true;
+      const submitButton = e?.target?.querySelector('button[type="submit"]');
+
+      inputs.forEach((input) => {
+        if (input.id === "shipWhatsapp" || input.id === "shipZip") input.value = input.value.replace(/\D/g, "");
+        const message = validateCheckoutField(input);
+        const error = document.querySelector(`[data-checkout-error="${input.id}"]`);
+        if (error) error.textContent = message;
+        if (message) isValid = false;
+      });
+
+      if (!isValid) return;
+      if (!canSubmitNow()) return;
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = "Preparando pago seguro...";
+      }
+      saveLeadData();
+      submitIntake("");
+      ANALYTICS.track("begin_checkout", getCurrentPlanPayload());
+      ANALYTICS.track("payment_attempt", getCurrentPlanPayload());
+
+      if (stripeState.isReady) {
+        await confirmStripePayment();
+        return;
+      }
+
+      const plan = (window.formData.selectedPlan || "").toLowerCase();
+      let target = "";
+      if (plan.includes("esencial")) target = paymentLinks.esencial;
+      if (plan.includes("avanzado")) target = paymentLinks.avanzado;
+      if (plan.includes("elite")) target = paymentLinks.elite;
+
+      if (!target || target.startsWith("PEGAR_LINK")) {
+        await initializeStripePayment();
+        return;
+      }
+
+      window.location.href = target;
+    }
+
+    function revealOnScroll() {
+      const items = document.querySelectorAll(".reveal-post");
+      if (!("IntersectionObserver" in window)) {
+        items.forEach((item) => item.classList.add("is-visible"));
+        return;
+      }
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.12 });
+      items.forEach((item, index) => {
+        item.style.transitionDelay = `${Math.min(index * 45, 260)}ms`;
+        observer.observe(item);
+      });
+    }
+
+    function continueToPayment() {
+      if (!window.formData.selectedPlan) return;
+      document.querySelector("#checkout")?.scrollIntoView({ behavior: "smooth" });
+    }
+
+    function renderThankYouPage() {
+      if (approvalTimer) clearInterval(approvalTimer);
+      setFinalProgress("Pago recibido");
+      app.innerHTML = `
+        <section class="card intro">
+          <p class="eyebrow">DERMÁTIKA</p>
+          <h1>Estamos preparando tu tratamiento dermatológico y tu rutina personalizada.</h1>
+          <p>Gracias por confiar en Dermátika. Nuestro equipo revisará tu información con cuidado para avanzar con tu protocolo personalizado y los siguientes pasos de tu tratamiento.</p>
+          <div class="process-loader" aria-label="Preparación en proceso">
+            <span aria-hidden="true"></span>
+            <p>Tiempo aproximado de revisión inicial: 24 a 48 horas hábiles.</p>
+          </div>
+          <p class="summary-note">Tu piel puede cambiar. Hoy diste el primer paso para recuperar la confianza.</p>
+          <button class="button button-full" type="button" onclick="goHome()">Volver al inicio</button>
+        </section>
+      `;
+    }
+
+    function goHome() {
+      window.location.href = "index.html";
+    }
+
+    function renderHomePage() {
+      goHome();
+    }
+
+    function submitEvaluation(payload) {
+      const evaluationPayload = {
+        brand: "DERMÁTIKA",
+        submittedAt: new Date().toISOString(),
+        answers: { ...payload }
+      };
+
+      syncLegacyMedicalForm(payload);
+      autosaveLead("Formulario actualizado", { payment_status: "lead" });
+      return evaluationPayload;
+    }
+
+    window.renderWelcomeScreen = renderWelcomeScreen;
+    window.startQuiz = startQuiz;
+    window.renderQuestion = renderQuestion;
+    window.submitEvaluation = submitEvaluation;
+    window.submitLead = submitLead;
+    window.openPrivacyModal = openPrivacyModal;
+    window.closePrivacyModal = closePrivacyModal;
+    window.goHome = goHome;
+    window.renderHomePage = renderHomePage;
+    window.goToContact = goToContact;
+    window.evaluateEligibility = evaluateEligibility;
+    window.renderMedicalReviewScreen = renderMedicalReviewScreen;
+    window.renderContactStep = renderContactStep;
+    window.renderPostEligibilityPage = renderPostEligibilityPage;
+    window.startApprovalCountdown = startApprovalCountdown;
+    window.getRecommendedPlan = getRecommendedPlan;
+    window.selectPlan = selectPlan;
+    window.toggleFAQ = toggleFAQ;
+    window.revealOnScroll = revealOnScroll;
+    window.toggleTimeline = toggleTimeline;
+    window.continueToPayment = continueToPayment;
+    window.renderCheckoutSection = renderCheckoutSection;
+    window.goToPayment = goToPayment;
+    window.saveLeadData = saveLeadData;
+    window.renderThankYouPage = renderThankYouPage;
+    window.mostrarPantallaNoAprobado = mostrarPantallaNoAprobado;
+    window.mostrarPantallaAprobado = mostrarPantallaAprobado;
+    window.apiUrl = apiUrl;
+    window.loadPublicConfig = loadPublicConfig;
+    window.STRIPE_PAYMENTS = STRIPE_PAYMENTS;
+    window.ANALYTICS = ANALYTICS;
+    window.createPatientReference = createPatientReference;
+    window.ensureInternalFolio = ensureInternalFolio;
+    window.getCurrentPlanPayload = getCurrentPlanPayload;
+    window.collectMedicalFormData = collectMedicalFormData;
+    window.collectAutosaveData = collectAutosaveData;
+    window.autosaveLead = autosaveLead;
+    window.submitIntake = submitIntake;
+    window.handleCheckoutReturn = handleCheckoutReturn;
+    window.handleStripeReturn = handleStripeReturn;
+    window.handleResumeLink = handleResumeLink;
+    window.formData = answers;
+    window.dermatikaEvaluationAnswers = answers;
+    window.plans = plans;
+
+    loadPublicConfig();
+    handleResumeLink();
+    Promise.resolve(handleStripeReturn()).then((handled) => {
+      if (!handled && !handleCheckoutReturn()) renderWelcomeScreen();
+    });
+  </script>
+</body>
+</html>
