@@ -11,6 +11,7 @@ const nodemailer = require('nodemailer');
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(express.json({ limit: '8mb' }));
@@ -76,6 +77,7 @@ const PLAN_PRICE_MAP = {
 };
 
 const DAYS_30_MS = 30 * 24 * 60 * 60 * 1000;
+const postalCache = new Map();
 
 function readDb() {
   try {
@@ -103,6 +105,62 @@ function normalizePhone(v = '') {
 
 function makeId(prefix = 'row') {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+}
+
+function normalizePostalPayload(data = {}) {
+  let neighborhoods = [];
+  let municipality = '';
+  let state = '';
+  let city = '';
+
+  if (data?.response) {
+    const items = Array.isArray(data.response.asentamiento) ? data.response.asentamiento : [];
+    neighborhoods = items.map((item) => String(item || '').trim()).filter(Boolean);
+    municipality = String(data.response.municipio || '').trim();
+    state = String(data.response.estado || '').trim();
+    city = String(data.response.ciudad || municipality || '').trim();
+  } else if (data?.zip_code) {
+    const items = Array.isArray(data.zip_code?.d_asenta) ? data.zip_code.d_asenta : [];
+    neighborhoods = items.map((item) => String(item || '').trim()).filter(Boolean);
+    municipality = String(data.zip_code?.d_mnpio || '').trim();
+    state = String(data.zip_code?.d_estado || '').trim();
+    city = String(data.zip_code?.d_ciudad || municipality || '').trim();
+  }
+
+  const uniqueNeighborhoods = [...new Set(neighborhoods)];
+  if (!uniqueNeighborhoods.length || !municipality || !state) return null;
+  return {
+    neighborhoods: uniqueNeighborhoods,
+    municipality,
+    city: city || municipality,
+    state
+  };
+}
+
+async function lookupPostalCode(cp = '') {
+  const zip = String(cp || '').trim();
+  if (!/^\d{5}$/.test(zip)) return null;
+  if (postalCache.has(zip)) return postalCache.get(zip);
+
+  const endpoints = [
+    `https://api-sepomex.hckdrk.mx/query/info_cp/${zip}?type=simplified`,
+    `https://sepomex.icalialabs.com/api/v1/zip_codes/${zip}`
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, { method: 'GET' });
+      if (!response.ok) continue;
+      const data = await response.json();
+      const normalized = normalizePostalPayload(data);
+      if (!normalized) continue;
+      postalCache.set(zip, normalized);
+      return normalized;
+    } catch (_) {
+      // try next source
+    }
+  }
+  return null;
 }
 
 function createFolio() {
@@ -493,6 +551,22 @@ app.get('/api/config', (_req, res) => {
       elite: process.env.PAYMENT_LINK_ELITE || 'PEGAR_LINK_PAGO_ELITE'
     }
   });
+});
+
+app.get('/api/postal-code/:cp', async (req, res) => {
+  const cp = sanitizeText(req.params.cp || '', 10);
+  if (!/^\d{5}$/.test(cp)) {
+    return res.status(400).json({ ok: false, error: 'invalid_postal_code' });
+  }
+  try {
+    const result = await lookupPostalCode(cp);
+    if (!result) {
+      return res.status(404).json({ ok: false, error: 'postal_code_not_found' });
+    }
+    return res.json({ ok: true, cp, ...result });
+  } catch {
+    return res.status(500).json({ ok: false, error: 'postal_lookup_unavailable' });
+  }
 });
 
 app.post('/api/track-event', (req, res) => {
