@@ -179,6 +179,7 @@ app.post('/api/evaluation-guard', async (req, res) => {
     correo: normalizeText(req.body?.correo),
     whatsapp: normalizePhone(req.body?.whatsapp),
     fechaNacimiento: normalizeText(req.body?.fechaNacimiento),
+    sexo: normalizeText(req.body?.sexo || req.body?.sex),
     localEligibility: normalizeText(req.body?.localEligibility),
     recommended: req.body?.recommended || null,
     submittedAt: req.body?.submittedAt || nowIso,
@@ -244,7 +245,7 @@ app.post('/api/evaluation-guard', async (req, res) => {
 
   await sendInternalMail(
     `Nueva evaluación DERMÁTIKA #${row.folio} - ${sanitizeText(req.body?.nombre || 'Paciente', 80)} - ${row.plan || 'Sin plan'}`,
-    `FOLIO: ${row.folio}\nEstado: ${status}\nNombre: ${sanitizeText(req.body?.nombre || '', 80)} ${sanitizeText(req.body?.apellido || '', 80)}\nCorreo: ${payload.correo}\nWhatsApp: ${payload.whatsapp}\nPlan recomendado: ${row.plan || 'N/A'}\nMedicamento: ${row.medication || 'N/A'}\nPrecio: ${row.price || 0}\nFecha/Hora: ${nowIso}`
+    `FOLIO: ${row.folio}\nEstado: ${status}\nNombre: ${sanitizeText(req.body?.nombre || '', 80)} ${sanitizeText(req.body?.apellido || '', 80)}\nCorreo: ${payload.correo}\nWhatsApp: ${payload.whatsapp}\nSexo: ${payload.sexo || 'n/a'}\nPlan recomendado: ${row.plan || 'N/A'}\nMedicamento: ${row.medication || 'N/A'}\nPrecio: ${row.price || 0}\nFecha/Hora: ${nowIso}`
   );
 
   return res.json({ ok: true, action: 'ALLOW', status, folio: row.folio, recommendedPlan: row.plan || null, data: row });
@@ -291,6 +292,7 @@ app.post('/api/lead-autosave', (req, res) => {
     correo: normalizeText(body.correo || body.email),
     whatsapp: normalizePhone(body.whatsapp || body.phone),
     fechaNacimiento: normalizeText(body.fechaNacimiento || body.birthdate),
+    sexo: normalizeText(body.sexo || body.sex || body.gender),
     status: STATES.NUEVO,
     autosave: true,
     answers: body.answers_json || body.answers || null,
@@ -341,6 +343,7 @@ app.post('/api/intake', upload.any(), async (req, res) => {
     correo: normalizeText(body.correo || body.email),
     whatsapp: normalizePhone(body.whatsapp || body.phone),
     fechaNacimiento: normalizeText(body.fechaNacimiento || body.birthdate),
+    sexo: normalizeText(body.sexo || body.sex || body.gender),
     status,
     plan,
     medication,
@@ -373,6 +376,7 @@ app.post('/api/intake', upload.any(), async (req, res) => {
     `Nombre: ${sanitizeText(body.patient_name || body.nombre || '', 120)} ${sanitizeText(body.apellido || '', 120)}`.trim(),
     `Correo: ${sanitizeText(body.email || body.correo || '', 120)}`,
     `WhatsApp: ${normalizePhone(body.phone || body.whatsapp || '')}`,
+    `Sexo: ${sanitizeText(body.sexo || body.sex || body.gender || '', 20) || 'n/a'}`,
     `Plan recomendado: ${plan || 'N/A'}`,
     `Medicamento: ${medication || 'N/A'}`,
     `Precio: ${price || 0}`,
@@ -410,6 +414,7 @@ async function createPaymentIntentHandler(req, res) {
     const folio = getOrCreateFolio(req.body?.patientReference || req.body?.folio || '');
     const email = sanitizeText(req.body?.email || '', 120);
     const phone = normalizePhone(req.body?.phone || '');
+    const sexo = sanitizeText(req.body?.sexo || req.body?.sex || '', 20);
     const patientName = sanitizeText(req.body?.patientName || req.body?.nombre || '', 120);
     const medication = sanitizeText(req.body?.medication || '', 60);
     const planName = sanitizeText(req.body?.planName || req.body?.plan_name || planKey, 80);
@@ -427,6 +432,7 @@ async function createPaymentIntentHandler(req, res) {
         plan: expectedPlan.plan,
         medicamento: expectedPlan.medication,
         precio: String(expectedAmount / 100),
+        sexo,
         plan_key: planKey,
         patient_reference: folio,
         email,
