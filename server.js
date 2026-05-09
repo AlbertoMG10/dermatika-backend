@@ -247,6 +247,15 @@ const stripeSecret = process.env.STRIPE_SECRET_KEY || '';
 const stripePublic = process.env.STRIPE_PUBLIC_KEY || '';
 const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: '2024-04-10' }) : null;
 
+// ── Log de arranque: verificar variables críticas ──
+console.log('[CONFIG] STRIPE_SECRET_KEY:', stripeSecret ? '✅ configurada' : '❌ FALTA');
+console.log('[CONFIG] STRIPE_PUBLIC_KEY:', stripePublic ? '✅ configurada' : '❌ FALTA');
+console.log('[CONFIG] SMTP_HOST:', process.env.SMTP_HOST || '❌ FALTA');
+console.log('[CONFIG] SMTP_USER:', process.env.SMTP_USER || '❌ FALTA');
+console.log('[CONFIG] SMTP_PASS:', process.env.SMTP_PASS ? '✅ configurada' : '❌ FALTA');
+console.log('[CONFIG] INTERNAL_EMAIL_TO:', process.env.INTERNAL_EMAIL_TO || '❌ FALTA');
+console.log('[CONFIG] NETLIFY_ORIGIN:', process.env.NETLIFY_ORIGIN || '❌ FALTA');
+
 // ✅ Nodemailer: solo si está configurado SMTP
 const mailTransport = process.env.SMTP_HOST
   ? nodemailer.createTransport({
@@ -260,7 +269,10 @@ const mailTransport = process.env.SMTP_HOST
   : null;
 
 async function sendInternalMail(subject, text, attachments = []) {
-  if (!mailTransport || !process.env.INTERNAL_EMAIL_TO) return false;
+  if (!mailTransport || !process.env.INTERNAL_EMAIL_TO) {
+    console.error('[MAIL] No enviado — falta SMTP_HOST o INTERNAL_EMAIL_TO');
+    return false;
+  }
   try {
     await mailTransport.sendMail({
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
@@ -269,8 +281,10 @@ async function sendInternalMail(subject, text, attachments = []) {
       text,
       attachments
     });
+    console.log('[MAIL] ✅ Enviado:', subject);
     return true;
-  } catch {
+  } catch (err) {
+    console.error('[MAIL] ❌ Error al enviar:', err.message || err);
     return false;
   }
 }
@@ -422,6 +436,7 @@ app.post('/api/lead-autosave', (req, res) => {
 
 // Intake principal con fotos
 app.post('/api/intake', upload.any(), async (req, res) => {
+  console.log('[INTAKE] ← Recibido desde:', req.headers.origin || 'origen desconocido');
   const body = req.body || {};
   const nowIso = new Date().toISOString();
   const paymentStatus = normalizeText(body.payment_status || '');
@@ -507,7 +522,9 @@ app.post('/api/intake', upload.any(), async (req, res) => {
 // ✅ Crear Payment Intent con Stripe
 async function createPaymentIntentHandler(req, res) {
   try {
+    console.log('[STRIPE] ← Solicitud de pago recibida, plan:', req.body?.planKey);
     if (!stripe || !stripePublic) {
+      console.error('[STRIPE] ❌ Stripe no configurado — faltan keys');
       return res.status(503).json({ ok: false, error: 'stripe_not_configured' });
     }
     const planKey = normalizePlanKey(req.body?.planKey || '');
@@ -561,8 +578,8 @@ async function createPaymentIntentHandler(req, res) {
       paymentIntentId: paymentIntent.id,
       publishableKey: stripePublic
     });
-  } catch {
-    // ✅ No exponer stack trace
+  } catch (err) {
+    console.error('[STRIPE] ❌ Error creando payment intent:', err.message || err);
     return res.status(500).json({ ok: false, error: 'stripe_error' });
   }
 }
