@@ -250,7 +250,7 @@ const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: '2024-04-10
 // ✅ Resend API — usa RESEND_API_KEY y ADMIN_EMAIL ya configurados en Render
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const ADMIN_EMAIL    = process.env.ADMIN_EMAIL || '';
-const MAIL_FROM      = 'DERMATIKA <onboarding@resend.dev>';
+const MAIL_FROM = 'DERMATIKA <no-reply@dermatika.mx>';
 
 // ── Log de arranque: verificar variables críticas ──
 console.log('[CONFIG] STRIPE_SECRET_KEY:', stripeSecret ? '✅ configurada' : '❌ FALTA');
