@@ -757,6 +757,79 @@ function buildEmailHTML(data) {
 </body></html>`;
 }
 
+// ══════════════════════════════════════════════════════════════════
+// HELPER: Recuperar fotos guardadas en DB y convertir a attachments
+// ══════════════════════════════════════════════════════════════════
+function getPhotoAttachments(row) {
+  if (!Array.isArray(row.files)) return [];
+  return row.files
+    .filter(f => f.data)  // solo las que tienen base64
+    .map((f, idx) => ({
+      filename: `${row.folio || 'foto'}-foto-${idx + 1}.${(f.type || 'image/jpeg').split('/')[1] || 'jpg'}`,
+      content: f.data,    // ya es base64
+      contentType: f.type || 'image/jpeg'
+    }));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// HELPER: Construir y enviar el correo completo con PDF para un row
+// ══════════════════════════════════════════════════════════════════
+async function sendPaymentConfirmedEmail(row, paymentIntentId) {
+  const nowIso = new Date().toISOString();
+  const nombre = sanitizeText(row.nombre || row.fullName || 'Paciente', 80);
+  const plan   = sanitizeText(row.plan || 'N/A', 40);
+  const folio  = row.folio;
+
+  const subject = `✅ PAGO CONFIRMADO — DERMÁTIKA #${folio} — ${nombre} — ${plan}`;
+
+  // Generar PDF
+  let pdfAttachment = null;
+  try {
+    const pdfBuf = await generateEvaluationPDF({ ...row, eligibility_status: STATES.PAGADO });
+    pdfAttachment = {
+      filename: `DERMATIKA-Evaluacion-${folio}.pdf`,
+      content: pdfBuf.toString('base64'),
+      contentType: 'application/pdf'
+    };
+    console.log('[MAIL] ✅ PDF generado:', pdfAttachment.filename, '| bytes:', pdfBuf.length);
+  } catch (pdfErr) {
+    console.error('[MAIL] ❌ Error PDF:', pdfErr.message);
+  }
+
+  // Fotos guardadas
+  const photoAttachments = getPhotoAttachments(row);
+  console.log('[MAIL] Fotos adjuntas:', photoAttachments.length);
+
+  const allAttachments = [
+    ...(pdfAttachment ? [pdfAttachment] : []),
+    ...photoAttachments
+  ];
+
+  // Email HTML
+  const emailHTML = buildEmailHTML({ ...row, eligibility_status: STATES.PAGADO, payment_reference: paymentIntentId });
+
+  const emailText = [
+    '✅ PAGO CONFIRMADO — DERMÁTIKA',
+    `Folio: ${folio}`,
+    `Paciente: ${nombre}`,
+    `Correo: ${row.correo || row.email || 'N/A'}`,
+    `WhatsApp: ${row.whatsapp || 'N/A'}`,
+    `Plan: ${plan}`,
+    `Medicamento: ${sanitizeText(row.medication || 'N/A', 40)}`,
+    `Precio: $${row.price || 0} MXN`,
+    `Estado: PAGADO`,
+    `Referencia Stripe: ${paymentIntentId || 'N/A'}`,
+    `Fecha: ${nowIso}`,
+    '',
+    'Ver PDF adjunto para evaluación médica completa.',
+    'DERMÁTIKA — dermatika.mx'
+  ].join('\n');
+
+  const sent = await sendInternalMail(subject, emailText, allAttachments, emailHTML);
+  console.log('[MAIL] Correo enviado:', sent ? '✅' : '❌', '| adjuntos:', allAttachments.length);
+  return sent;
+}
+
 // ==================== RUTAS API ====================
 
 // Guard de evaluación (anti-duplicado, anti-reintento 30d)
@@ -793,10 +866,8 @@ app.post('/api/evaluation-guard', async (req, res) => {
       };
       db.push(row);
       writeDb(db);
-      await sendInternalMail(
-        `Nueva evaluación DERMÁTIKA #${payload.folio} - ${sanitizeText(req.body?.nombre || 'Paciente', 80)} - REINTENTO_BLOQUEADO`,
-        `FOLIO: ${payload.folio}\nEstado: ${STATES.REINTENTO_BLOQUEADO}\nMotivo: no_candidato_30d\nFecha/Hora: ${nowIso}`
-      );
+      // ✅ NO enviar correo — el paciente no es candidato, no hay pago
+      console.log('[GUARD] Reintento bloqueado 30d — folio:', payload.folio);
       return res.json({ ok: true, action: 'BLOCKED_30_DAYS', status: STATES.REINTENTO_BLOQUEADO, folio: payload.folio });
     }
   }
@@ -834,10 +905,9 @@ app.post('/api/evaluation-guard', async (req, res) => {
   db.push(row);
   writeDb(db);
 
-  await sendInternalMail(
-    `Nueva evaluación DERMÁTIKA #${row.folio} - ${sanitizeText(req.body?.nombre || 'Paciente', 80)} - ${row.plan || 'Sin plan'}`,
-    `FOLIO: ${row.folio}\nEstado: ${status}\nNombre: ${sanitizeText(req.body?.nombre || '', 80)} ${sanitizeText(req.body?.apellido || '', 80)}\nCorreo: ${payload.correo}\nWhatsApp: ${payload.whatsapp}\nSexo: ${payload.sexo || 'n/a'}\nPlan recomendado: ${row.plan || 'N/A'}\nMedicamento: ${row.medication || 'N/A'}\nPrecio: ${row.price || 0}\nFecha/Hora: ${nowIso}`
-  );
+  // ✅ NO enviar correo aquí — el correo completo se envía SOLO cuando Stripe confirme el pago
+  // El correo médico con PDF se dispara en /api/intake (con pago confirmado) o en el webhook
+  console.log('[GUARD] Evaluación guardada como', status, '— folio:', row.folio, '— esperando pago');
 
   return res.json({ ok: true, action: 'ALLOW', status, folio: row.folio, recommendedPlan: row.plan || null, data: row });
 });
@@ -887,7 +957,14 @@ app.post('/api/lead-autosave', (req, res) => {
     sexo: normalizeText(body.sexo || body.sex || body.gender),
     status: STATES.NUEVO,
     autosave: true,
-    answers: body.answers_json || body.answers || null,
+    answers: (() => {
+      try {
+        const raw = body.answers_json || body.answers;
+        if (!raw) return null;
+        if (typeof raw === 'string') return JSON.parse(raw);
+        return raw;
+      } catch(e) { return body.answers_json || body.answers || null; }
+    })(),
     plan: sanitizeText(body.plan || body.plan_name || '', 40) || null,
     medication: sanitizeText(body.medication || '', 40) || null,
     price: Number(body.price || body.plan_price || 0) || null,
@@ -916,12 +993,14 @@ app.post('/api/intake', upload.any(), async (req, res) => {
   const medication = sanitizeText(body.medication || '', 40) || null;
   const price = Number(body.price || body.plan_price || 0) || null;
 
+  // Guardar fotos como base64 en la DB para usarlas después del webhook
   const fileSummaries = Array.isArray(req.files)
     ? req.files.map((f) => ({
         field: sanitizeText(f.fieldname || '', 40),
         name: sanitizeText(f.originalname || '', 120),
         type: sanitizeText(f.mimetype || '', 80),
-        size: Number(f.size || 0)
+        size: Number(f.size || 0),
+        data: f.buffer ? f.buffer.toString('base64') : null  // ← guardado para envío posterior
       }))
     : [];
 
@@ -945,7 +1024,21 @@ app.post('/api/intake', upload.any(), async (req, res) => {
     medication,
     price,
     folio,
-    shipping: body.shipping || null,
+    shipping: (() => {
+      if (body.shipping && typeof body.shipping === 'object') return body.shipping;
+      // Reconstruir shipping desde campos del FormData
+      const s = {};
+      const shipFields = ['shipFullName','shipEmail','shipWhatsapp','shipAddress1','shipExterior',
+                          'shipAddress2','shipZip','shipNeighborhood','shipNeighborhoodManual',
+                          'shipMunicipality','shipCity','shipState'];
+      shipFields.forEach(k => { if (body[k]) s[k] = sanitizeText(body[k], 200); });
+      if (body.shippingStreet) s.shipAddress1 = sanitizeText(body.shippingStreet, 200);
+      if (body.shippingNeighborhood) s.shipNeighborhood = sanitizeText(body.shippingNeighborhood, 100);
+      if (body.shippingMunicipality) s.shipMunicipality = sanitizeText(body.shippingMunicipality, 100);
+      if (body.shippingState) s.shipState = sanitizeText(body.shippingState, 100);
+      if (body.shippingPostalCode) s.shipZip = sanitizeText(body.shippingPostalCode, 10);
+      return Object.keys(s).length > 0 ? s : null;
+    })(),
     payment_reference: sanitizeText(body.payment_reference || body.payment_intent_id || '', 120) || null,
     payment_status: sanitizeText(body.payment_status || 'pending', 80),
     answers: body.answers_json || body.answers || null,
@@ -958,63 +1051,21 @@ app.post('/api/intake', upload.any(), async (req, res) => {
   db.push(payload);
   writeDb(db);
 
-  const subject = `Nueva evaluación DERMÁTIKA #${folio} - ${sanitizeText(body.patient_name || body.nombre || 'Paciente', 80)} - ${plan || 'Sin plan'}`;
-
-  // ── Adjuntos: fotos del paciente
-  const photoAttachments = Array.isArray(req.files)
-    ? req.files.map((file, idx) => ({
-        filename: `${folio}-foto-${idx + 1}.${file.mimetype.split('/')[1] || 'jpg'}`,
-        content: file.buffer,
-        contentType: file.mimetype
-      }))
-    : [];
-
-  // ── Generar PDF de evaluación completa
-  let pdfAttachment = null;
-  try {
-    const pdfBuffer = await generateEvaluationPDF(payload);
-    pdfAttachment = {
-      filename: `DERMATIKA-Evaluacion-${folio}.pdf`,
-      content: pdfBuffer,
-      contentType: 'application/pdf'
-    };
-    console.log('[PDF] ✅ Generado:', pdfAttachment.filename, '| tamaño:', pdfBuffer.length, 'bytes');
-  } catch (pdfErr) {
-    console.error('[PDF] ❌ Error generando PDF:', pdfErr.message);
+  // ✅ Solo enviar correo si el pago viene confirmado desde el frontend
+  // En la mayoría de los casos llega como "pending" — el correo real lo envía confirm-payment-intent o webhook
+  if (status === STATES.PAGADO) {
+    console.log('[INTAKE] Pago confirmado en intake — enviando correo con PDF + fotos');
+    await sendPaymentConfirmedEmail(payload, body.payment_reference || body.payment_intent_id || '');
+    payload.mail_sent_payment = true;
+    payload.mail_sent_at = new Date().toISOString();
+    // Actualizar registro en DB con flag de correo enviado
+    const dbU = readDb();
+    const idxU = dbU.findIndex(r => r.folio === folio);
+    if (idxU >= 0) { dbU[idxU] = { ...dbU[idxU], ...payload }; writeDb(dbU); }
+  } else {
+    console.log('[INTAKE] Evaluación guardada como PENDIENTE — correo se enviará tras confirmar pago. Folio:', folio);
   }
 
-  const allAttachments = [
-    ...(pdfAttachment ? [pdfAttachment] : []),
-    ...photoAttachments
-  ];
-
-  // ── Email HTML profesional
-  const emailHTML = buildEmailHTML(payload);
-
-  // ── Texto plano como fallback
-  const emailText = [
-    `NUEVA EVALUACIÓN DERMÁTIKA`,
-    `Folio: ${folio}`,
-    `Fecha: ${nowIso}`,
-    ``,
-    `PACIENTE`,
-    `Nombre: ${sanitizeText(body.patient_name || body.nombre || '', 120)} ${sanitizeText(body.apellido || '', 120)}`.trim(),
-    `Correo: ${sanitizeText(body.email || body.correo || '', 120)}`,
-    `WhatsApp: ${normalizePhone(body.phone || body.whatsapp || '')}`,
-    `Sexo: ${sanitizeText(body.sexo || body.sex || '', 20) || 'N/A'}`,
-    ``,
-    `PLAN`,
-    `Plan: ${plan || 'N/A'}`,
-    `Medicamento: ${medication || 'N/A'}`,
-    `Precio: $${price || 0} MXN`,
-    `Estado pago: ${sanitizeText(body.payment_status || 'pending', 80)}`,
-    ``,
-    `Ver PDF adjunto para evaluación médica completa.`,
-    ``,
-    `DERMÁTIKA — dermatika.mx`
-  ].join('\n');
-
-  await sendInternalMail(subject, emailText, allAttachments, emailHTML);
   return res.json({ ok: true, folio, status, recommendedPlan: plan || null });
 });
 
@@ -1099,19 +1150,117 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
 
     const db = readDb();
     const idx = db.findIndex((row) => String(row.folio || '').toLowerCase() === folio.toLowerCase());
+    let updatedRow = null;
+
     if (idx >= 0) {
       db[idx].payment_reference = paymentIntentId;
       db[idx].payment_status = paid ? 'succeeded' : String(pi?.status || 'unknown');
       db[idx].status = paid ? STATES.PAGADO : db[idx].status;
       db[idx].updatedAt = new Date().toISOString();
+      updatedRow = db[idx];
       writeDb(db);
     }
 
+    // ✅ CORREO MÉDICO COMPLETO CON PDF + FOTOS — solo si el pago fue exitoso
+    if (paid && updatedRow && !updatedRow.mail_sent_payment) {
+      console.log('[CONFIRM] Pago exitoso — enviando correo completo con PDF y fotos. Folio:', folio);
+      try {
+        await sendPaymentConfirmedEmail(updatedRow, paymentIntentId);
+        // Marcar correo enviado para evitar duplicados con webhook
+        const db2 = readDb();
+        const idx2 = db2.findIndex(r => r.folio === folio);
+        if (idx2 >= 0) {
+          db2[idx2].mail_sent_payment = true;
+          db2[idx2].mail_sent_at = new Date().toISOString();
+          writeDb(db2);
+        }
+      } catch (mailErr) {
+        console.error('[CONFIRM] ❌ Error enviando correo:', mailErr.message || mailErr);
+      }
+    } else if (!paid) {
+      console.log('[CONFIRM] Pago NO exitoso — status:', pi?.status, '— NO se envía correo');
+    } else {
+      console.log('[CONFIRM] Correo ya enviado previamente para folio:', folio);
+    }
+
     return res.json({ ok: true, paid, status: pi?.status || 'unknown', folio });
-  } catch {
+  } catch (err) {
+    console.error('[CONFIRM] ❌ Error:', err.message || err);
     return res.status(500).json({ ok: false, error: 'confirm_failed' });
   }
 });
+
+// ══════════════════════════════════════════════════════════════════
+// WEBHOOK DE STRIPE — Segunda línea de defensa para confirmar pago
+// Evento: payment_intent.succeeded
+// ══════════════════════════════════════════════════════════════════
+app.post('/api/stripe-webhook',
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+    const sig = req.headers['stripe-signature'];
+    let event;
+
+    try {
+      if (webhookSecret && sig) {
+        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      } else {
+        // Sin secreto configurado — parsear directamente (solo para testing)
+        event = JSON.parse(req.body.toString());
+        console.warn('[WEBHOOK] ⚠️ STRIPE_WEBHOOK_SECRET no configurado — sin verificación de firma');
+      }
+    } catch (err) {
+      console.error('[WEBHOOK] ❌ Firma inválida:', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    console.log('[WEBHOOK] Evento recibido:', event.type);
+
+    if (event.type === 'payment_intent.succeeded') {
+      const pi = event.data.object;
+      const paymentIntentId = pi.id;
+      const folioMeta = pi.metadata?.folio || pi.metadata?.patient_reference || '';
+
+      console.log('[WEBHOOK] payment_intent.succeeded — folio meta:', folioMeta, '| pi:', paymentIntentId);
+
+      const db = readDb();
+      const idx = db.findIndex((row) =>
+        String(row.folio || '').toLowerCase() === folioMeta.toLowerCase() ||
+        String(row.payment_reference || '') === paymentIntentId
+      );
+
+      if (idx >= 0) {
+        const alreadyPaid = db[idx].status === STATES.PAGADO && db[idx].mail_sent_payment;
+        if (alreadyPaid) {
+          console.log('[WEBHOOK] Correo ya enviado para este folio — skip');
+          return res.json({ received: true });
+        }
+
+        db[idx].payment_reference = paymentIntentId;
+        db[idx].payment_status = 'succeeded';
+        db[idx].status = STATES.PAGADO;
+        db[idx].updatedAt = new Date().toISOString();
+        const updatedRow = db[idx];
+        writeDb(db);
+
+        // Enviar correo completo con PDF + fotos
+        try {
+          await sendPaymentConfirmedEmail(updatedRow, paymentIntentId);
+          db[idx].mail_sent_payment = true;
+          db[idx].mail_sent_at = new Date().toISOString();
+          writeDb(db);
+          console.log('[WEBHOOK] ✅ Correo con PDF + fotos enviado. Folio:', updatedRow.folio);
+        } catch (mailErr) {
+          console.error('[WEBHOOK] ❌ Error enviando correo:', mailErr.message);
+        }
+      } else {
+        console.warn('[WEBHOOK] Folio no encontrado en DB para pi:', paymentIntentId);
+      }
+    }
+
+    return res.json({ received: true });
+  }
+);
 
 // ✅ Config pública (solo public key — nunca secret key)
 app.get('/api/config', (_req, res) => {
