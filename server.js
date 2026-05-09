@@ -1,13 +1,14 @@
 'use strict';
 
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const dotenv = require('dotenv');
-const Stripe = require('stripe');
-const helmet = require('helmet');
+const express  = require('express');
+const fs       = require('fs');
+const path     = require('path');
+const dotenv   = require('dotenv');
+const Stripe   = require('stripe');
+const helmet   = require('helmet');
 const rateLimit = require('express-rate-limit');
-const multer = require('multer');
+const multer   = require('multer');
+const PDFDocument = require('pdfkit');
 
 dotenv.config();
 
@@ -259,28 +260,43 @@ console.log('[CONFIG] RESEND_API_KEY:', RESEND_API_KEY ? '✅ configurada' : '�
 console.log('[CONFIG] ADMIN_EMAIL:', ADMIN_EMAIL || '❌ FALTA');
 console.log('[CONFIG] FRONTEND_ORIGIN:', process.env.FRONTEND_ORIGIN || '❌ FALTA');
 
-async function sendInternalMail(subject, text, attachments = []) {
+async function sendInternalMail(subject, text, attachments = [], htmlContent = null) {
   if (!RESEND_API_KEY || !ADMIN_EMAIL) {
     console.error('[MAIL] No enviado — falta RESEND_API_KEY o ADMIN_EMAIL');
     return false;
   }
   try {
+    // Construir payload — Resend soporta attachments como base64
+    const payload = {
+      from: MAIL_FROM,
+      to: [ADMIN_EMAIL],
+      subject,
+      text,
+      ...(htmlContent ? { html: htmlContent } : {})
+    };
+
+    // Adjuntar archivos si los hay
+    if (attachments && attachments.length > 0) {
+      payload.attachments = attachments.map(att => ({
+        filename: att.filename || 'adjunto',
+        content: Buffer.isBuffer(att.content)
+          ? att.content.toString('base64')
+          : (typeof att.content === 'string' ? att.content : Buffer.from(att.content).toString('base64')),
+        ...(att.contentType ? { type: att.contentType } : {})
+      }));
+    }
+
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        from: MAIL_FROM,
-        to: [ADMIN_EMAIL],
-        subject,
-        text
-      })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (res.ok) {
-      console.log('[MAIL] ✅ Enviado via Resend:', subject, '| id:', data.id);
+      console.log('[MAIL] ✅ Enviado via Resend:', subject, '| id:', data.id, '| adjuntos:', payload.attachments?.length || 0);
       return true;
     } else {
       console.error('[MAIL] ❌ Resend error:', JSON.stringify(data));
@@ -290,6 +306,455 @@ async function sendInternalMail(subject, text, attachments = []) {
     console.error('[MAIL] ❌ Error fetch Resend:', err.message || err);
     return false;
   }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// GENERADOR DE PDF — EVALUACIÓN COMPLETA DEL PACIENTE
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * Genera un PDF completo con la evaluación del paciente.
+ * @returns {Promise<Buffer>} Buffer del PDF generado
+ */
+function generateEvaluationPDF(data) {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 48, size: 'A4' });
+      const chunks = [];
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const TEAL   = '#4AAFC0';
+      const INK    = '#0F1B2D';
+      const MUTED  = '#53657A';
+      const LINE   = '#E5EDF0';
+      const W      = doc.page.width - 96; // ancho usable
+
+      const s = (v, fallback = 'N/A') =>
+        (v !== null && v !== undefined && String(v).trim() !== '') ? String(v).trim() : fallback;
+      const money = v => v ? `$${Number(v).toLocaleString('es-MX')} MXN` : 'N/A';
+
+      // ── ENCABEZADO ──────────────────────────────────────────────
+      doc.rect(0, 0, doc.page.width, 90).fill(INK);
+      doc.fillColor('#FFFFFF').fontSize(22).font('Helvetica-Bold')
+         .text('DERMÁTIKA', 48, 28, { lineBreak: false });
+      doc.fillColor(TEAL).fontSize(10).font('Helvetica')
+         .text('TRATAMIENTOS DERMATOLÓGICOS', 48, 54);
+      doc.fillColor('#FFFFFF').fontSize(9)
+         .text('Evaluación Médica — Documento Confidencial', 48, 70);
+
+      // Folio + fecha arriba derecha
+      const folio = s(data.folio);
+      const fecha = data.createdAt
+        ? new Date(data.createdAt).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })
+        : new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
+      doc.fillColor('#FFFFFF').fontSize(9).font('Helvetica-Bold')
+         .text(`Folio: ${folio}`, doc.page.width - 200, 28, { width: 160, align: 'right' });
+      doc.font('Helvetica').fontSize(8)
+         .text(fecha, doc.page.width - 200, 44, { width: 160, align: 'right' });
+
+      doc.moveDown(3.5);
+
+      // ── HELPER: sección ──────────────────────────────────────────
+      function seccion(titulo) {
+        doc.moveDown(0.6);
+        doc.rect(48, doc.y, W, 22).fill(TEAL);
+        doc.fillColor('#FFFFFF').fontSize(10).font('Helvetica-Bold')
+           .text(titulo.toUpperCase(), 56, doc.y - 17);
+        doc.moveDown(0.8);
+      }
+
+      // ── HELPER: fila clave-valor ──────────────────────────────────
+      function fila(label, valor) {
+        const y = doc.y;
+        doc.fillColor(MUTED).fontSize(8.5).font('Helvetica')
+           .text(label + ':', 48, y, { width: 170, continued: false });
+        doc.fillColor(INK).fontSize(8.5).font('Helvetica-Bold')
+           .text(s(valor), 230, y, { width: W - 182 });
+        doc.moveDown(0.3);
+        // Línea divisoria suave
+        doc.moveTo(48, doc.y).lineTo(48 + W, doc.y).strokeColor(LINE).lineWidth(0.5).stroke();
+        doc.moveDown(0.3);
+      }
+
+      // ── ESTADO DEL PACIENTE ──────────────────────────────────────
+      const estado = s(data.eligibility_status || data.status, 'candidato').toLowerCase();
+      let estadoLabel = 'CANDIDATO';
+      let estadoColor = '#16a34a';
+      if (estado.includes('revision') || estado.includes('revisión')) {
+        estadoLabel = 'REQUIERE REVISIÓN MÉDICA'; estadoColor = '#d97706';
+      } else if (estado.includes('no_apto') || estado.includes('no_aprobado')) {
+        estadoLabel = 'NO CANDIDATO'; estadoColor = '#dc2626';
+      }
+
+      doc.rect(48, doc.y, W, 36).fill(estadoColor + '15');
+      doc.rect(48, doc.y, 4, 36).fill(estadoColor);
+      doc.fillColor(estadoColor).fontSize(13).font('Helvetica-Bold')
+         .text(estadoLabel, 62, doc.y - 28);
+      doc.fillColor(MUTED).fontSize(8).font('Helvetica')
+         .text('Estado de elegibilidad para isotretinoína', 62, doc.y - 4);
+      doc.moveDown(1.8);
+
+      // Parsear respuestas del cuestionario
+      let answers = {};
+      try {
+        if (typeof data.answers === 'string') answers = JSON.parse(data.answers);
+        else if (data.answers && typeof data.answers === 'object') answers = data.answers;
+      } catch(e) { answers = {}; }
+
+      const shipping = data.shipping || {};
+
+      // ── 1. DATOS PERSONALES ──────────────────────────────────────
+      seccion('1. Datos del Paciente');
+      fila('Nombre completo', `${s(data.nombre || data.fullName)} ${s(data.apellido,'')}`.trim());
+      fila('Correo electrónico', s(data.correo || data.email));
+      fila('WhatsApp', s(data.whatsapp));
+      fila('Fecha de nacimiento', s(data.fechaNacimiento || answers.birthdate));
+      fila('Sexo biológico', s(data.sexo || answers.sex));
+      fila('Edad (rango)', s(answers.ageRange));
+      fila('Tipo de piel', s(answers.skinType));
+      fila('Ciudad / Estado', s(answers.cityState));
+
+      // ── 2. DIRECCIÓN ─────────────────────────────────────────────
+      if (shipping && (shipping.address || shipping.colonia || shipping.zip)) {
+        seccion('2. Dirección de Envío');
+        fila('Calle y número', s(shipping.address));
+        fila('Colonia', s(shipping.colonia));
+        fila('Código postal', s(shipping.zip));
+        fila('Municipio / Alcaldía', s(shipping.municipality));
+        fila('Ciudad', s(shipping.city));
+        fila('Estado', s(shipping.state));
+        fila('Referencias', s(shipping.references));
+      }
+
+      // ── 3. INFORMACIÓN DEL ACNÉ ──────────────────────────────────
+      seccion('3. Información del Acné');
+      fila('Gravedad del acné', s(answers.acneSeverity));
+      fila('Tiempo con acné', s(answers.duration));
+      fila('Zonas afectadas', Array.isArray(answers.acneAreas) ? answers.acneAreas.join(', ') : s(answers.acneAreas));
+      fila('Tipo de lesiones', Array.isArray(answers.acneType) ? answers.acneType.join(', ') : s(answers.acneType));
+      fila('¿Es doloroso?', s(answers.acnePain));
+      fila('Impacto emocional', s(answers.acnePsychological));
+      fila('¿Ha empeorado?', s(answers.acneWorsening));
+      fila('Factores desencadenantes', Array.isArray(answers.acneTriggers) ? answers.acneTriggers.join(', ') : s(answers.acneTriggers));
+
+      // ── 4. HISTORIAL DE TRATAMIENTOS ─────────────────────────────
+      seccion('4. Historial de Tratamientos');
+      fila('Tratamientos previos', Array.isArray(answers.previousTreatments) ? answers.previousTreatments.join(', ') : s(answers.previousTreatments));
+      fila('Respuesta a tratamientos', s(answers.treatmentResponse));
+      fila('Antibióticos > 3 meses', s(answers.antibioticDuration));
+      fila('Isotretinoína previa', s(answers.isotretinoinBefore));
+      fila('Efectos adversos previos', Array.isArray(answers.isotretinoinSideEffects) ? answers.isotretinoinSideEffects.join(', ') : s(answers.isotretinoinSideEffects));
+
+      // ── 5. SALUD GENERAL ─────────────────────────────────────────
+      seccion('5. Salud General');
+      fila('Estado de salud general', s(answers.generalHealth));
+      fila('Condiciones crónicas', Array.isArray(answers.chronicConditions) ? answers.chronicConditions.join(', ') : s(answers.chronicConditions));
+      fila('Medicamentos actuales', s(answers.currentMedications));
+      fila('Detalle medicamentos', s(answers.currentMedicationsDetail));
+      fila('Vitamina A / Retinol', s(answers.vitaminA));
+      fila('Tetraciclinas activas', s(answers.tetracyclines));
+
+      // ── 6. CONTRAINDICACIONES ────────────────────────────────────
+      seccion('6. Contraindicaciones');
+      fila('Enfermedad hepática', s(answers.liverCondition));
+      fila('Colesterol / Triglicéridos', s(answers.lipidProfile));
+      fila('Enfermedad renal', s(answers.kidneyCondition));
+      fila('Alergias', s(answers.allergies));
+      fila('Detalle alergias', s(answers.allergiesDetail));
+      fila('Cirugía reciente', s(answers.recentSurgery));
+
+      // ── 7. SALUD MENTAL ──────────────────────────────────────────
+      seccion('7. Salud Mental');
+      fila('Condiciones diagnosticadas', Array.isArray(answers.mentalHealth) ? answers.mentalHealth.join(', ') : s(answers.mentalHealth));
+      fila('Ideas suicidas (12 meses)', s(answers.suicidalIdeation));
+      fila('Medicamentos psiquiátricos', s(answers.mentalHealthMeds));
+      fila('Detalle medicamentos', s(answers.mentalHealthMedsDetail));
+
+      // ── 8. EMBARAZO / ANTICONCEPCIÓN ────────────────────────────
+      if ((data.sexo || answers.sex || '').toLowerCase().includes('femen') ||
+          answers.pregnancyStatus) {
+        seccion('8. Embarazo y Anticoncepción');
+        fila('Estado de embarazo', s(answers.pregnancyStatus));
+        fila('Lactancia', s(answers.breastfeeding));
+        fila('Método anticonceptivo', s(answers.contraception));
+        fila('Prueba de embarazo reciente', s(answers.pregnancyTestDone));
+        fila('Consentimiento aviso médico', s(answers.pregnancyConsent));
+      }
+
+      // ── 9. HÁBITOS ───────────────────────────────────────────────
+      seccion('9. Hábitos y Estilo de Vida');
+      fila('Consumo de alcohol', s(answers.alcoholConsumption));
+      fila('Exposición solar intensa', s(answers.sunExposure));
+      fila('Donador de sangre', s(answers.bloodDonation));
+      fila('Lentes de contacto', s(answers.contactLenses));
+
+      // ── 10. PLAN Y PAGO ──────────────────────────────────────────
+      seccion('10. Plan y Estado de Pago');
+      fila('Plan seleccionado', s(data.plan));
+      fila('Medicamento', s(data.medication));
+      fila('Precio', money(data.price));
+      fila('Estado del pago', s(data.payment_status));
+      fila('Referencia de pago', s(data.payment_reference));
+      fila('Folio DERMÁTIKA', folio);
+      fila('Fecha/Hora de evaluación', fecha);
+
+      // ── AVISO LEGAL ──────────────────────────────────────────────
+      doc.moveDown(1.2);
+      doc.rect(48, doc.y, W, 42).fill('#FFF8F0');
+      doc.rect(48, doc.y, 3, 42).fill('#d97706');
+      doc.fillColor('#92650a').fontSize(8).font('Helvetica-Bold')
+         .text('AVISO IMPORTANTE', 60, doc.y - 36);
+      doc.font('Helvetica').fillColor('#7a5c00')
+         .text(
+           'Información sujeta a revisión y aprobación médica. Este documento es confidencial y ' +
+           'generado automáticamente. El tratamiento será confirmado únicamente después de la ' +
+           'revisión por un profesional médico autorizado de DERMÁTIKA.',
+           60, doc.y - 20, { width: W - 20, lineBreak: true }
+         );
+      doc.moveDown(0.8);
+
+      // ── PIE DE PÁGINA ────────────────────────────────────────────
+      doc.fontSize(7.5).fillColor(MUTED).font('Helvetica')
+         .text(
+           `DERMÁTIKA — dermatika.mx | Generado: ${fecha} | Folio: ${folio}`,
+           48, doc.page.height - 40, { width: W, align: 'center' }
+         );
+
+      doc.end();
+    } catch(err) {
+      reject(err);
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// GENERADOR DE EMAIL HTML PROFESIONAL
+// ══════════════════════════════════════════════════════════════════
+function buildEmailHTML(data) {
+  const s = (v, fb = 'N/A') =>
+    (v !== null && v !== undefined && String(v).trim() !== '') ? String(v).trim() : fb;
+  const money = v => v ? `$${Number(v).toLocaleString('es-MX')} MXN` : 'N/A';
+
+  let answers = {};
+  try {
+    if (typeof data.answers === 'string') answers = JSON.parse(data.answers);
+    else if (data.answers && typeof data.answers === 'object') answers = data.answers;
+  } catch(e) {}
+
+  const shipping = data.shipping || {};
+  const folio    = s(data.folio);
+  const fecha    = data.createdAt
+    ? new Date(data.createdAt).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })
+    : new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
+
+  const estadoRaw = s(data.eligibility_status || data.status, 'candidato').toLowerCase();
+  let estadoLabel = 'Candidato'; let estadoColor = '#16a34a'; let estadoBg = '#f0fdf4';
+  if (estadoRaw.includes('revision') || estadoRaw.includes('revisión')) {
+    estadoLabel = 'Requiere revisión médica'; estadoColor = '#d97706'; estadoBg = '#fffbeb';
+  } else if (estadoRaw.includes('no_apto') || estadoRaw.includes('no_aprobado')) {
+    estadoLabel = 'No candidato'; estadoColor = '#dc2626'; estadoBg = '#fef2f2';
+  }
+
+  const row = (label, value) =>
+    `<tr><td style="padding:7px 12px;color:#53657A;font-size:13px;width:200px;border-bottom:1px solid #E5EDF0">${label}</td>` +
+    `<td style="padding:7px 12px;color:#0F1B2D;font-size:13px;font-weight:600;border-bottom:1px solid #E5EDF0">${s(value)}</td></tr>`;
+
+  const arr = (v) => Array.isArray(v) ? v.join(', ') : s(v);
+  const section = (title) =>
+    `<tr><td colspan="2" style="background:#4AAFC0;color:#fff;font-size:11px;font-weight:800;` +
+    `letter-spacing:1.5px;text-transform:uppercase;padding:8px 12px">${title}</td></tr>`;
+
+  const isFemale = (s(data.sexo || answers.sex, '')).toLowerCase().includes('femen') || answers.pregnancyStatus;
+
+  return `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nueva Evaluación DERMÁTIKA</title></head>
+<body style="margin:0;padding:0;background:#F6FAFC;font-family:Inter,system-ui,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#F6FAFC;padding:32px 16px">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
+
+  <!-- Header -->
+  <tr><td style="background:#0F1B2D;border-radius:16px 16px 0 0;padding:28px 32px">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td>
+          <div style="color:#fff;font-size:22px;font-weight:900;letter-spacing:-0.5px">DERMÁTIKA<span style="color:#4AAFC0">*</span></div>
+          <div style="color:rgba(255,255,255,0.5);font-size:11px;margin-top:4px">TRATAMIENTOS DERMATOLÓGICOS</div>
+        </td>
+        <td align="right">
+          <div style="color:#4AAFC0;font-size:11px;font-weight:800;letter-spacing:1px">NUEVA EVALUACIÓN</div>
+          <div style="color:rgba(255,255,255,0.6);font-size:10px;margin-top:4px">${fecha}</div>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- Estado badge -->
+  <tr><td style="background:${estadoBg};border-left:4px solid ${estadoColor};padding:16px 32px">
+    <span style="color:${estadoColor};font-size:13px;font-weight:800">${estadoLabel}</span>
+    <span style="color:#53657A;font-size:12px;margin-left:12px">Folio: <strong style="color:#0F1B2D">${folio}</strong></span>
+  </td></tr>
+
+  <!-- Resumen rápido -->
+  <tr><td style="background:#fff;padding:24px 32px;border-bottom:1px solid #E5EDF0">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td style="text-align:center;padding:0 8px">
+          <div style="font-size:11px;color:#53657A;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Plan</div>
+          <div style="font-size:16px;font-weight:800;color:#0F1B2D">${s(data.plan)}</div>
+        </td>
+        <td style="text-align:center;padding:0 8px;border-left:1px solid #E5EDF0;border-right:1px solid #E5EDF0">
+          <div style="font-size:11px;color:#53657A;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Medicamento</div>
+          <div style="font-size:16px;font-weight:800;color:#0F1B2D">${s(data.medication)}</div>
+        </td>
+        <td style="text-align:center;padding:0 8px">
+          <div style="font-size:11px;color:#53657A;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Precio</div>
+          <div style="font-size:16px;font-weight:800;color:#4AAFC0">${money(data.price)}</div>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- Pago -->
+  <tr><td style="background:#fff;padding:8px 32px 0">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+      ${section('Estado de Pago')}
+      ${row('Estado del pago', data.payment_status)}
+      ${row('Referencia Stripe', data.payment_reference)}
+    </table>
+  </td></tr>
+
+  <!-- Datos personales -->
+  <tr><td style="background:#fff;padding:8px 32px 0">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+      ${section('Datos del Paciente')}
+      ${row('Nombre', `${s(data.nombre||data.fullName)} ${s(data.apellido,'')}`)}
+      ${row('Correo', s(data.correo||data.email))}
+      ${row('WhatsApp', s(data.whatsapp))}
+      ${row('Fecha de nacimiento', s(data.fechaNacimiento||answers.birthdate))}
+      ${row('Sexo biológico', s(data.sexo||answers.sex))}
+      ${row('Edad (rango)', s(answers.ageRange))}
+      ${row('Tipo de piel', s(answers.skinType))}
+      ${row('Ciudad / Estado', s(answers.cityState))}
+    </table>
+  </td></tr>
+
+  ${shipping.address || shipping.zip ? `
+  <!-- Dirección -->
+  <tr><td style="background:#fff;padding:8px 32px 0">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+      ${section('Dirección de Envío')}
+      ${row('Calle y número', shipping.address)}
+      ${row('Colonia', shipping.colonia)}
+      ${row('Código postal', shipping.zip)}
+      ${row('Municipio / Alcaldía', shipping.municipality)}
+      ${row('Ciudad', shipping.city)}
+      ${row('Estado', shipping.state)}
+      ${row('Referencias', shipping.references)}
+    </table>
+  </td></tr>` : ''}
+
+  <!-- Acné -->
+  <tr><td style="background:#fff;padding:8px 32px 0">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+      ${section('Información del Acné')}
+      ${row('Gravedad', answers.acneSeverity)}
+      ${row('Tiempo con acné', answers.duration)}
+      ${row('Zonas afectadas', arr(answers.acneAreas))}
+      ${row('Tipo de lesiones', arr(answers.acneType))}
+      ${row('¿Es doloroso?', answers.acnePain)}
+      ${row('Impacto emocional', answers.acnePsychological)}
+      ${row('¿Ha empeorado?', answers.acneWorsening)}
+      ${row('Factores desencadenantes', arr(answers.acneTriggers))}
+    </table>
+  </td></tr>
+
+  <!-- Tratamientos previos -->
+  <tr><td style="background:#fff;padding:8px 32px 0">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+      ${section('Historial de Tratamientos')}
+      ${row('Tratamientos previos', arr(answers.previousTreatments))}
+      ${row('Respuesta a tratamientos', answers.treatmentResponse)}
+      ${row('Antibióticos > 3 meses', answers.antibioticDuration)}
+      ${row('Isotretinoína previa', answers.isotretinoinBefore)}
+      ${row('Efectos adversos previos', arr(answers.isotretinoinSideEffects))}
+    </table>
+  </td></tr>
+
+  <!-- Salud general -->
+  <tr><td style="background:#fff;padding:8px 32px 0">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+      ${section('Salud General y Contraindicaciones')}
+      ${row('Estado de salud general', answers.generalHealth)}
+      ${row('Condiciones crónicas', arr(answers.chronicConditions))}
+      ${row('Medicamentos actuales', answers.currentMedications)}
+      ${row('Detalle medicamentos', answers.currentMedicationsDetail)}
+      ${row('Vitamina A / Retinol', answers.vitaminA)}
+      ${row('Tetraciclinas activas', answers.tetracyclines)}
+      ${row('Enfermedad hepática', answers.liverCondition)}
+      ${row('Colesterol / Triglicéridos', answers.lipidProfile)}
+      ${row('Enfermedad renal', answers.kidneyCondition)}
+      ${row('Alergias', answers.allergies)}
+      ${row('Detalle alergias', answers.allergiesDetail)}
+      ${row('Cirugía reciente', answers.recentSurgery)}
+    </table>
+  </td></tr>
+
+  <!-- Salud mental -->
+  <tr><td style="background:#fff;padding:8px 32px 0">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+      ${section('Salud Mental')}
+      ${row('Condiciones diagnosticadas', arr(answers.mentalHealth))}
+      ${row('Ideas suicidas (12 meses)', answers.suicidalIdeation)}
+      ${row('Medicamentos psiquiátricos', answers.mentalHealthMeds)}
+    </table>
+  </td></tr>
+
+  ${isFemale ? `
+  <!-- Embarazo -->
+  <tr><td style="background:#fff;padding:8px 32px 0">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+      ${section('Embarazo y Anticoncepción')}
+      ${row('Estado de embarazo', answers.pregnancyStatus)}
+      ${row('Lactancia', answers.breastfeeding)}
+      ${row('Método anticonceptivo', answers.contraception)}
+      ${row('Prueba de embarazo', answers.pregnancyTestDone)}
+    </table>
+  </td></tr>` : ''}
+
+  <!-- Hábitos -->
+  <tr><td style="background:#fff;padding:8px 32px 16px">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+      ${section('Hábitos')}
+      ${row('Consumo de alcohol', answers.alcoholConsumption)}
+      ${row('Exposición solar', answers.sunExposure)}
+      ${row('Donador de sangre', answers.bloodDonation)}
+      ${row('Lentes de contacto', answers.contactLenses)}
+    </table>
+  </td></tr>
+
+  <!-- Aviso legal -->
+  <tr><td style="background:#FFF8F0;border-left:3px solid #d97706;padding:14px 32px;margin:0 0 0">
+    <p style="margin:0;font-size:11px;color:#92650a;font-weight:700">⚠ AVISO MÉDICO</p>
+    <p style="margin:4px 0 0;font-size:11px;color:#7a5c00;line-height:1.6">
+      Información sujeta a revisión y aprobación médica. Este documento es confidencial.
+      El PDF adjunto contiene el expediente completo del paciente.
+    </p>
+  </td></tr>
+
+  <!-- Footer -->
+  <tr><td style="background:#0F1B2D;border-radius:0 0 16px 16px;padding:16px 32px;text-align:center">
+    <p style="margin:0;color:rgba(255,255,255,0.4);font-size:10px">
+      DERMÁTIKA · dermatika.mx · Folio ${folio}
+    </p>
+  </td></tr>
+
+</table>
+</td></tr></table>
+</body></html>`;
 }
 
 // ==================== RUTAS API ====================
@@ -494,31 +959,62 @@ app.post('/api/intake', upload.any(), async (req, res) => {
   writeDb(db);
 
   const subject = `Nueva evaluación DERMÁTIKA #${folio} - ${sanitizeText(body.patient_name || body.nombre || 'Paciente', 80)} - ${plan || 'Sin plan'}`;
-  const attachments = Array.isArray(req.files)
+
+  // ── Adjuntos: fotos del paciente
+  const photoAttachments = Array.isArray(req.files)
     ? req.files.map((file, idx) => ({
-        filename: `${folio}-foto-${idx + 1}-${sanitizeText(file.originalname || 'imagen', 80)}`,
+        filename: `${folio}-foto-${idx + 1}.${file.mimetype.split('/')[1] || 'jpg'}`,
         content: file.buffer,
         contentType: file.mimetype
       }))
     : [];
 
-  const emailBody = [
-    `FOLIO: ${folio}`,
+  // ── Generar PDF de evaluación completa
+  let pdfAttachment = null;
+  try {
+    const pdfBuffer = await generateEvaluationPDF(payload);
+    pdfAttachment = {
+      filename: `DERMATIKA-Evaluacion-${folio}.pdf`,
+      content: pdfBuffer,
+      contentType: 'application/pdf'
+    };
+    console.log('[PDF] ✅ Generado:', pdfAttachment.filename, '| tamaño:', pdfBuffer.length, 'bytes');
+  } catch (pdfErr) {
+    console.error('[PDF] ❌ Error generando PDF:', pdfErr.message);
+  }
+
+  const allAttachments = [
+    ...(pdfAttachment ? [pdfAttachment] : []),
+    ...photoAttachments
+  ];
+
+  // ── Email HTML profesional
+  const emailHTML = buildEmailHTML(payload);
+
+  // ── Texto plano como fallback
+  const emailText = [
+    `NUEVA EVALUACIÓN DERMÁTIKA`,
+    `Folio: ${folio}`,
+    `Fecha: ${nowIso}`,
+    ``,
+    `PACIENTE`,
     `Nombre: ${sanitizeText(body.patient_name || body.nombre || '', 120)} ${sanitizeText(body.apellido || '', 120)}`.trim(),
     `Correo: ${sanitizeText(body.email || body.correo || '', 120)}`,
     `WhatsApp: ${normalizePhone(body.phone || body.whatsapp || '')}`,
-    `Sexo: ${sanitizeText(body.sexo || body.sex || body.gender || '', 20) || 'n/a'}`,
-    `Plan recomendado: ${plan || 'N/A'}`,
+    `Sexo: ${sanitizeText(body.sexo || body.sex || '', 20) || 'N/A'}`,
+    ``,
+    `PLAN`,
+    `Plan: ${plan || 'N/A'}`,
     `Medicamento: ${medication || 'N/A'}`,
-    `Precio: ${price || 0}`,
-    `Estado: ${status}`,
-    `Estado del pago: ${sanitizeText(body.payment_status || 'pending', 80)}`,
-    `Fecha/Hora: ${nowIso}`,
-    `Respuestas: ${typeof body.answers_json === 'string' ? body.answers_json : JSON.stringify(body.answers || {}, null, 2)}`,
-    `Fotos: ${JSON.stringify(fileSummaries, null, 2)}`
+    `Precio: $${price || 0} MXN`,
+    `Estado pago: ${sanitizeText(body.payment_status || 'pending', 80)}`,
+    ``,
+    `Ver PDF adjunto para evaluación médica completa.`,
+    ``,
+    `DERMÁTIKA — dermatika.mx`
   ].join('\n');
 
-  await sendInternalMail(subject, emailBody, attachments);
+  await sendInternalMail(subject, emailText, allAttachments, emailHTML);
   return res.json({ ok: true, folio, status, recommendedPlan: plan || null });
 });
 
