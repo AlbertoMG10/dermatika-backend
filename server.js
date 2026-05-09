@@ -1,3 +1,5 @@
+'use strict';
+
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -11,19 +13,56 @@ const nodemailer = require('nodemailer');
 dotenv.config();
 
 const app = express();
+
+// ✅ FIX: trust proxy debe ir ANTES de rate limit y middlewares (Render/Nginx)
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
-app.use(helmet());
+
+// ✅ Seguridad: Helmet con CSP
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "https://js.stripe.com"],
+      frameSrc: ["https://js.stripe.com", "https://hooks.stripe.com"],
+      connectSrc: [
+        "'self'",
+        "https://api.stripe.com",
+        process.env.NETLIFY_ORIGIN || '',
+        process.env.NETLIFY_PREVIEW_ORIGIN || ''
+      ].filter(Boolean),
+      imgSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      frameAncestors: ["'none'"]
+    }
+  },
+  crossOriginEmbedderPolicy: false
+}));
+
 app.use(express.json({ limit: '8mb' }));
 app.use(express.urlencoded({ extended: true, limit: '8mb' }));
 
+// ✅ Rate limit funcional con trust proxy ya configurado
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 180,
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  message: { ok: false, error: 'too_many_requests' }
 });
 app.use('/api', apiLimiter);
+
+// ✅ Rate limit más estricto para rutas de pago
+const paymentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'too_many_payment_requests' }
+});
+app.use('/api/create-stripe-payment-intent', paymentLimiter);
+app.use('/api/create-payment-intent', paymentLimiter);
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -35,6 +74,7 @@ const upload = multer({
   }
 });
 
+// ✅ CORS seguro: solo orígenes autorizados
 const ALLOWED_ORIGINS = new Set(
   [
     'https://dermatika.mx',
@@ -50,12 +90,13 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', origin);
   }
   res.header('Vary', 'Origin');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   return next();
 });
 
+// ✅ Base de datos JSON simple
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_PATH = path.join(DATA_DIR, 'evaluations.json');
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -88,11 +129,17 @@ function readDb() {
 }
 
 function writeDb(data) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf8');
+  try {
+    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    // Log sin exponer al usuario
+    console.error('[DERMATIKA] writeDb error');
+  }
 }
 
+// ✅ Sanitización: elimina caracteres peligrosos
 function sanitizeText(v = '', max = 200) {
-  return String(v || '').replace(/[<>]/g, '').trim().slice(0, max);
+  return String(v || '').replace(/[<>"'`]/g, '').trim().slice(0, max);
 }
 
 function normalizeText(v = '') {
@@ -129,12 +176,7 @@ function normalizePostalPayload(data = {}) {
 
   const uniqueNeighborhoods = [...new Set(neighborhoods)];
   if (!uniqueNeighborhoods.length || !municipality || !state) return null;
-  return {
-    neighborhoods: uniqueNeighborhoods,
-    municipality,
-    city: city || municipality,
-    state
-  };
+  return { neighborhoods: uniqueNeighborhoods, municipality, city: city || municipality, state };
 }
 
 async function lookupPostalCode(cp = '') {
@@ -149,15 +191,16 @@ async function lookupPostalCode(cp = '') {
 
   for (const endpoint of endpoints) {
     try {
-      const response = await fetch(endpoint, { method: 'GET' });
+      const response = await fetch(endpoint, { method: 'GET', signal: AbortSignal.timeout(5000) });
       if (!response.ok) continue;
       const data = await response.json();
       const normalized = normalizePostalPayload(data);
       if (!normalized) continue;
       postalCache.set(zip, normalized);
+      setTimeout(() => postalCache.delete(zip), 3600000); // TTL 1 hora
       return normalized;
     } catch (_) {
-      // try next source
+      // intentar siguiente fuente
     }
   }
   return null;
@@ -178,7 +221,8 @@ function getOrCreateFolio(raw = '') {
 function matchRecord(record, payload) {
   const emailMatch = payload.correo && record.correo === payload.correo;
   const phoneMatch = payload.whatsapp && record.whatsapp === payload.whatsapp;
-  const nameDobMatch = payload.fullName && payload.fechaNacimiento && record.fullName === payload.fullName && record.fechaNacimiento === payload.fechaNacimiento;
+  const nameDobMatch = payload.fullName && payload.fechaNacimiento &&
+    record.fullName === payload.fullName && record.fechaNacimiento === payload.fechaNacimiento;
   return emailMatch || phoneMatch || nameDobMatch;
 }
 
@@ -198,16 +242,20 @@ function normalizePlanKey(planRaw = '') {
   return '';
 }
 
+// ✅ Stripe: solo si están configuradas las keys
 const stripeSecret = process.env.STRIPE_SECRET_KEY || '';
 const stripePublic = process.env.STRIPE_PUBLIC_KEY || '';
-const stripe = stripeSecret ? new Stripe(stripeSecret) : null;
+const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: '2024-04-10' }) : null;
 
+// ✅ Nodemailer: solo si está configurado SMTP
 const mailTransport = process.env.SMTP_HOST
   ? nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT || 587),
       secure: String(process.env.SMTP_SECURE || 'false') === 'true',
-      auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS || '' } : undefined
+      auth: process.env.SMTP_USER
+        ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS || '' }
+        : undefined
     })
   : null;
 
@@ -227,6 +275,9 @@ async function sendInternalMail(subject, text, attachments = []) {
   }
 }
 
+// ==================== RUTAS API ====================
+
+// Guard de evaluación (anti-duplicado, anti-reintento 30d)
 app.post('/api/evaluation-guard', async (req, res) => {
   const nowIso = new Date().toISOString();
   const nowMs = Date.now();
@@ -309,7 +360,7 @@ app.post('/api/evaluation-guard', async (req, res) => {
   return res.json({ ok: true, action: 'ALLOW', status, folio: row.folio, recommendedPlan: row.plan || null, data: row });
 });
 
-
+// Resume por token/folio/email/teléfono
 app.get('/api/resume/:token', (req, res) => {
   const token = sanitizeText(req.params.token || '', 80).toLowerCase();
   const db = readDb();
@@ -340,6 +391,7 @@ app.get('/api/resume/:token', (req, res) => {
   });
 });
 
+// Autosave de lead
 app.post('/api/lead-autosave', (req, res) => {
   const body = req.body || {};
   const nowIso = new Date().toISOString();
@@ -368,11 +420,14 @@ app.post('/api/lead-autosave', (req, res) => {
   return res.json({ ok: true, saved: true, folio: payload.folio, status: payload.status });
 });
 
+// Intake principal con fotos
 app.post('/api/intake', upload.any(), async (req, res) => {
   const body = req.body || {};
   const nowIso = new Date().toISOString();
   const paymentStatus = normalizeText(body.payment_status || '');
-  const status = paymentStatus.includes('succeeded') || paymentStatus.includes('paid') ? STATES.PAGADO : STATES.CHECKOUT_PENDIENTE;
+  const status = paymentStatus.includes('succeeded') || paymentStatus.includes('paid')
+    ? STATES.PAGADO
+    : STATES.CHECKOUT_PENDIENTE;
   const folio = getOrCreateFolio(body.folio_dermatika || body.internal_folio || body.patient_reference);
   const plan = sanitizeText(body.plan || body.plan_name || '', 40) || null;
   const medication = sanitizeText(body.medication || '', 40) || null;
@@ -409,7 +464,7 @@ app.post('/api/intake', upload.any(), async (req, res) => {
     folio,
     shipping: body.shipping || null,
     payment_reference: sanitizeText(body.payment_reference || body.payment_intent_id || '', 120) || null,
-    payment_status: sanitizeText(body.payment_status || '', 80),
+    payment_status: sanitizeText(body.payment_status || 'pending', 80),
     answers: body.answers_json || body.answers || null,
     files: fileSummaries,
     createdAt: nowIso,
@@ -439,16 +494,17 @@ app.post('/api/intake', upload.any(), async (req, res) => {
     `Medicamento: ${medication || 'N/A'}`,
     `Precio: ${price || 0}`,
     `Estado: ${status}`,
-    `Fecha/Hora: ${nowIso}`,
     `Estado del pago: ${sanitizeText(body.payment_status || 'pending', 80)}`,
+    `Fecha/Hora: ${nowIso}`,
     `Respuestas: ${typeof body.answers_json === 'string' ? body.answers_json : JSON.stringify(body.answers || {}, null, 2)}`,
     `Fotos: ${JSON.stringify(fileSummaries, null, 2)}`
   ].join('\n');
-  await sendInternalMail(subject, emailBody, attachments);
 
+  await sendInternalMail(subject, emailBody, attachments);
   return res.json({ ok: true, folio, status, recommendedPlan: plan || null });
 });
 
+// ✅ Crear Payment Intent con Stripe
 async function createPaymentIntentHandler(req, res) {
   try {
     if (!stripe || !stripePublic) {
@@ -466,7 +522,7 @@ async function createPaymentIntentHandler(req, res) {
     }
     const requestedMedication = sanitizeText(req.body?.medication || '', 60);
     if (requestedMedication && normalizeText(requestedMedication) !== normalizeText(expectedPlan.medication)) {
-      return res.status(400).json({ ok: false, error: 'medication_mismatch', expectedMedication: expectedPlan.medication });
+      return res.status(400).json({ ok: false, error: 'medication_mismatch' });
     }
 
     const folio = getOrCreateFolio(req.body?.patientReference || req.body?.folio || '');
@@ -476,7 +532,6 @@ async function createPaymentIntentHandler(req, res) {
     const patientName = sanitizeText(req.body?.patientName || req.body?.nombre || '', 120);
     const medication = sanitizeText(req.body?.medication || '', 60);
     const planName = sanitizeText(req.body?.planName || req.body?.plan_name || planKey, 80);
-    const price = String(Number(req.body?.plan_price || expectedAmount / 100));
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: expectedAmount,
@@ -507,6 +562,7 @@ async function createPaymentIntentHandler(req, res) {
       publishableKey: stripePublic
     });
   } catch {
+    // ✅ No exponer stack trace
     return res.status(500).json({ ok: false, error: 'stripe_error' });
   }
 }
@@ -514,7 +570,7 @@ async function createPaymentIntentHandler(req, res) {
 app.post('/api/create-stripe-payment-intent', createPaymentIntentHandler);
 app.post('/api/create-payment-intent', createPaymentIntentHandler);
 
-
+// Confirmar payment intent
 app.post('/api/confirm-payment-intent', async (req, res) => {
   try {
     if (!stripe) return res.status(503).json({ ok: false, error: 'stripe_not_configured' });
@@ -541,18 +597,20 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
   }
 });
 
+// ✅ Config pública (solo public key — nunca secret key)
 app.get('/api/config', (_req, res) => {
   res.json({
     ok: true,
     publicKey: stripePublic || '',
     paymentLinks: {
-      esencial: process.env.PAYMENT_LINK_ESENCIAL || 'PEGAR_LINK_PAGO_ESENCIAL',
-      avanzado: process.env.PAYMENT_LINK_AVANZADO || 'PEGAR_LINK_PAGO_AVANZADO',
-      elite: process.env.PAYMENT_LINK_ELITE || 'PEGAR_LINK_PAGO_ELITE'
+      esencial: process.env.PAYMENT_LINK_ESENCIAL || '',
+      avanzado: process.env.PAYMENT_LINK_AVANZADO || '',
+      elite: process.env.PAYMENT_LINK_ELITE || ''
     }
   });
 });
 
+// ✅ CP lookup con cache y timeout
 app.get('/api/postal-code/:cp', async (req, res) => {
   const cp = sanitizeText(req.params.cp || '', 10);
   if (!/^\d{5}$/.test(cp)) {
@@ -569,6 +627,7 @@ app.get('/api/postal-code/:cp', async (req, res) => {
   }
 });
 
+// Track eventos analytics
 app.post('/api/track-event', (req, res) => {
   const body = req.body || {};
   const payload = {
@@ -576,8 +635,7 @@ app.post('/api/track-event', (req, res) => {
     event: sanitizeText(body.event || '', 80),
     source: sanitizeText(body.source || '', 80),
     timestamp: sanitizeText(body.timestamp || new Date().toISOString(), 80),
-    patient_reference: sanitizeText(body.patient_reference || '', 120),
-    meta: body
+    patient_reference: sanitizeText(body.patient_reference || '', 120)
   };
   const db = readDb();
   db.push(payload);
@@ -585,20 +643,30 @@ app.post('/api/track-event', (req, res) => {
   res.json({ ok: true });
 });
 
+// Health check
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'dermatika-backend', stripeReady: Boolean(stripe && stripePublic) });
+  res.json({
+    ok: true,
+    service: 'dermatika-backend',
+    stripeReady: Boolean(stripe && stripePublic),
+    timestamp: new Date().toISOString()
+  });
 });
 
+// ✅ Manejo global de errores: sin stack trace al cliente
 app.use((error, _req, res, _next) => {
   if (error && error.message === 'invalid_file_type') {
     return res.status(400).json({ ok: false, error: 'invalid_file_type' });
   }
   if (error && error.code === 'LIMIT_FILE_SIZE') {
-    return res.status(400).json({ ok: false, error: 'file_too_large', message: 'Tu imagen supera el límite de 5 MB. Sube una imagen más ligera.' });
+    return res.status(400).json({ ok: false, error: 'file_too_large', message: 'Tu imagen supera el límite de 5 MB.' });
   }
+  // Log interno sin exponer al cliente
+  console.error('[DERMATIKA] Error interno:', error?.code || error?.message || 'unknown');
   return res.status(500).json({ ok: false, error: 'internal_error' });
 });
 
-app.listen(process.env.PORT || 3000, () => {
-  console.log('DERMATIKA backend running');
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`[DERMATIKA] Backend corriendo en puerto ${PORT}`);
 });
