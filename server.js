@@ -8,7 +8,6 @@ const Stripe = require('stripe');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const multer = require('multer');
-const nodemailer = require('nodemailer');
 
 dotenv.config();
 
@@ -80,7 +79,8 @@ const ALLOWED_ORIGINS = new Set(
     'https://dermatika.mx',
     'https://www.dermatika.mx',
     process.env.NETLIFY_ORIGIN || '',
-    process.env.NETLIFY_PREVIEW_ORIGIN || ''
+    process.env.NETLIFY_PREVIEW_ORIGIN || '',
+    process.env.FRONTEND_ORIGIN || ''   // ← variable que ya tienes en Render
   ].filter(Boolean)
 );
 
@@ -247,44 +247,47 @@ const stripeSecret = process.env.STRIPE_SECRET_KEY || '';
 const stripePublic = process.env.STRIPE_PUBLIC_KEY || '';
 const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: '2024-04-10' }) : null;
 
+// ✅ Resend API — usa RESEND_API_KEY y ADMIN_EMAIL ya configurados en Render
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const ADMIN_EMAIL    = process.env.ADMIN_EMAIL || '';
+const MAIL_FROM      = 'DERMATIKA <onboarding@resend.dev>';
+
 // ── Log de arranque: verificar variables críticas ──
 console.log('[CONFIG] STRIPE_SECRET_KEY:', stripeSecret ? '✅ configurada' : '❌ FALTA');
 console.log('[CONFIG] STRIPE_PUBLIC_KEY:', stripePublic ? '✅ configurada' : '❌ FALTA');
-console.log('[CONFIG] SMTP_HOST:', process.env.SMTP_HOST || '❌ FALTA');
-console.log('[CONFIG] SMTP_USER:', process.env.SMTP_USER || '❌ FALTA');
-console.log('[CONFIG] SMTP_PASS:', process.env.SMTP_PASS ? '✅ configurada' : '❌ FALTA');
-console.log('[CONFIG] INTERNAL_EMAIL_TO:', process.env.INTERNAL_EMAIL_TO || '❌ FALTA');
-console.log('[CONFIG] NETLIFY_ORIGIN:', process.env.NETLIFY_ORIGIN || '❌ FALTA');
-
-// ✅ Nodemailer: solo si está configurado SMTP
-const mailTransport = process.env.SMTP_HOST
-  ? nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: String(process.env.SMTP_SECURE || 'false') === 'true',
-      auth: process.env.SMTP_USER
-        ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS || '' }
-        : undefined
-    })
-  : null;
+console.log('[CONFIG] RESEND_API_KEY:', RESEND_API_KEY ? '✅ configurada' : '❌ FALTA');
+console.log('[CONFIG] ADMIN_EMAIL:', ADMIN_EMAIL || '❌ FALTA');
+console.log('[CONFIG] FRONTEND_ORIGIN:', process.env.FRONTEND_ORIGIN || '❌ FALTA');
 
 async function sendInternalMail(subject, text, attachments = []) {
-  if (!mailTransport || !process.env.INTERNAL_EMAIL_TO) {
-    console.error('[MAIL] No enviado — falta SMTP_HOST o INTERNAL_EMAIL_TO');
+  if (!RESEND_API_KEY || !ADMIN_EMAIL) {
+    console.error('[MAIL] No enviado — falta RESEND_API_KEY o ADMIN_EMAIL');
     return false;
   }
   try {
-    await mailTransport.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
-      to: process.env.INTERNAL_EMAIL_TO,
-      subject,
-      text,
-      attachments
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: MAIL_FROM,
+        to: [ADMIN_EMAIL],
+        subject,
+        text
+      })
     });
-    console.log('[MAIL] ✅ Enviado:', subject);
-    return true;
+    const data = await res.json();
+    if (res.ok) {
+      console.log('[MAIL] ✅ Enviado via Resend:', subject, '| id:', data.id);
+      return true;
+    } else {
+      console.error('[MAIL] ❌ Resend error:', JSON.stringify(data));
+      return false;
+    }
   } catch (err) {
-    console.error('[MAIL] ❌ Error al enviar:', err.message || err);
+    console.error('[MAIL] ❌ Error fetch Resend:', err.message || err);
     return false;
   }
 }
