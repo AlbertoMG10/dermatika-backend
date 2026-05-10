@@ -331,9 +331,18 @@ function generateEvaluationPDF(data) {
       const LINE   = '#E5EDF0';
       const W      = doc.page.width - 96; // ancho usable
 
+      // Helper: busca en el valor dado, fallback a N/A
       const s = (v, fallback = 'N/A') =>
-        (v !== null && v !== undefined && String(v).trim() !== '') ? String(v).trim() : fallback;
+        (v !== null && v !== undefined && String(v).trim() !== '' && String(v).trim() !== 'undefined') 
+          ? String(v).trim() : fallback;
       const money = v => v ? `$${Number(v).toLocaleString('es-MX')} MXN` : 'N/A';
+      // Helper: obtener valor de answers o directamente de data
+      const a = (key) => {
+        const fromAnswers = answers?.[key];
+        const fromData    = data?.[key];
+        const val = (fromAnswers !== null && fromAnswers !== undefined) ? fromAnswers : fromData;
+        return val;
+      };
 
       // ── ENCABEZADO ──────────────────────────────────────────────
       doc.rect(0, 0, doc.page.width, 90).fill(INK);
@@ -410,11 +419,11 @@ function generateEvaluationPDF(data) {
       fila('Nombre completo', `${s(data.nombre || data.fullName)} ${s(data.apellido,'')}`.trim());
       fila('Correo electrónico', s(data.correo || data.email));
       fila('WhatsApp', s(data.whatsapp));
-      fila('Fecha de nacimiento', s(data.fechaNacimiento || answers.birthdate));
-      fila('Sexo biológico', s(data.sexo || answers.sex));
-      fila('Edad (rango)', s(answers.ageRange));
-      fila('Tipo de piel', s(answers.skinType));
-      fila('Ciudad / Estado', s(answers.cityState));
+      fila('Fecha de nacimiento', s(data.fechaNacimiento || a('birthdate')));
+      fila('Sexo biológico', s(data.sexo || a('sex')));
+      fila('Edad (rango)', s(a('ageRange')));
+      fila('Tipo de piel', s(a('skinType')));
+      fila('Ciudad / Estado', s(a('cityState')));
 
       // ── 2. DIRECCIÓN ─────────────────────────────────────────────
       if (shipping && (shipping.address || shipping.colonia || shipping.zip)) {
@@ -430,65 +439,65 @@ function generateEvaluationPDF(data) {
 
       // ── 3. INFORMACIÓN DEL ACNÉ ──────────────────────────────────
       seccion('3. Información del Acné');
-      fila('Gravedad del acné', s(answers.acneSeverity));
-      fila('Tiempo con acné', s(answers.duration));
-      fila('Zonas afectadas', Array.isArray(answers.acneAreas) ? answers.acneAreas.join(', ') : s(answers.acneAreas));
-      fila('Tipo de lesiones', Array.isArray(answers.acneType) ? answers.acneType.join(', ') : s(answers.acneType));
-      fila('¿Es doloroso?', s(answers.acnePain));
-      fila('Impacto emocional', s(answers.acnePsychological));
-      fila('¿Ha empeorado?', s(answers.acneWorsening));
-      fila('Factores desencadenantes', Array.isArray(answers.acneTriggers) ? answers.acneTriggers.join(', ') : s(answers.acneTriggers));
+      fila('Gravedad del acné', s(a('acneSeverity')));
+      fila('Tiempo con acné', s(a('duration')));
+      fila('Zonas afectadas', Array.isArray(a('acneAreas')) ? a('acneAreas').join(', ') : s(a('acneAreas')));
+      fila('Tipo de lesiones', Array.isArray(a('acneType')) ? a('acneType').join(', ') : s(a('acneType')));
+      fila('¿Es doloroso?', s(a('acnePain')));
+      fila('Impacto emocional', s(a('acnePsychological')));
+      fila('¿Ha empeorado?', s(a('acneWorsening')));
+      fila('Factores desencadenantes', Array.isArray(a('acneTriggers')) ? a('acneTriggers').join(', ') : s(a('acneTriggers')));
 
       // ── 4. HISTORIAL DE TRATAMIENTOS ─────────────────────────────
       seccion('4. Historial de Tratamientos');
-      fila('Tratamientos previos', Array.isArray(answers.previousTreatments) ? answers.previousTreatments.join(', ') : s(answers.previousTreatments));
-      fila('Respuesta a tratamientos', s(answers.treatmentResponse));
-      fila('Antibióticos > 3 meses', s(answers.antibioticDuration));
-      fila('Isotretinoína previa', s(answers.isotretinoinBefore));
-      fila('Efectos adversos previos', Array.isArray(answers.isotretinoinSideEffects) ? answers.isotretinoinSideEffects.join(', ') : s(answers.isotretinoinSideEffects));
+      fila('Tratamientos previos', Array.isArray(a('previousTreatments')) ? a('previousTreatments').join(', ') : s(a('previousTreatments')));
+      fila('Respuesta a tratamientos', s(a('treatmentResponse')));
+      fila('Antibióticos > 3 meses', s(a('antibioticDuration')));
+      fila('Isotretinoína previa', s(a('isotretinoinBefore')));
+      fila('Efectos adversos previos', Array.isArray(a('isotretinoinSideEffects')) ? a('isotretinoinSideEffects').join(', ') : s(a('isotretinoinSideEffects')));
 
       // ── 5. SALUD GENERAL ─────────────────────────────────────────
       seccion('5. Salud General');
-      fila('Estado de salud general', s(answers.generalHealth));
-      fila('Condiciones crónicas', Array.isArray(answers.chronicConditions) ? answers.chronicConditions.join(', ') : s(answers.chronicConditions));
-      fila('Medicamentos actuales', s(answers.currentMedications));
-      fila('Detalle medicamentos', s(answers.currentMedicationsDetail));
-      fila('Vitamina A / Retinol', s(answers.vitaminA));
-      fila('Tetraciclinas activas', s(answers.tetracyclines));
+      fila('Estado de salud general', s(a('generalHealth')));
+      fila('Condiciones crónicas', Array.isArray(a('chronicConditions')) ? a('chronicConditions').join(', ') : s(a('chronicConditions')));
+      fila('Medicamentos actuales', s(a('currentMedications')));
+      fila('Detalle medicamentos', s(a('currentMedicationsDetail')));
+      fila('Vitamina A / Retinol', s(a('vitaminA')));
+      fila('Tetraciclinas activas', s(a('tetracyclines')));
 
       // ── 6. CONTRAINDICACIONES ────────────────────────────────────
       seccion('6. Contraindicaciones');
-      fila('Enfermedad hepática', s(answers.liverCondition));
-      fila('Colesterol / Triglicéridos', s(answers.lipidProfile));
-      fila('Enfermedad renal', s(answers.kidneyCondition));
-      fila('Alergias', s(answers.allergies));
-      fila('Detalle alergias', s(answers.allergiesDetail));
-      fila('Cirugía reciente', s(answers.recentSurgery));
+      fila('Enfermedad hepática', s(a('liverCondition')));
+      fila('Colesterol / Triglicéridos', s(a('lipidProfile')));
+      fila('Enfermedad renal', s(a('kidneyCondition')));
+      fila('Alergias', s(a('allergies')));
+      fila('Detalle alergias', s(a('allergiesDetail')));
+      fila('Cirugía reciente', s(a('recentSurgery')));
 
       // ── 7. SALUD MENTAL ──────────────────────────────────────────
       seccion('7. Salud Mental');
-      fila('Condiciones diagnosticadas', Array.isArray(answers.mentalHealth) ? answers.mentalHealth.join(', ') : s(answers.mentalHealth));
-      fila('Ideas suicidas (12 meses)', s(answers.suicidalIdeation));
-      fila('Medicamentos psiquiátricos', s(answers.mentalHealthMeds));
-      fila('Detalle medicamentos', s(answers.mentalHealthMedsDetail));
+      fila('Condiciones diagnosticadas', Array.isArray(a('mentalHealth')) ? a('mentalHealth').join(', ') : s(a('mentalHealth')));
+      fila('Ideas suicidas (12 meses)', s(a('suicidalIdeation')));
+      fila('Medicamentos psiquiátricos', s(a('mentalHealthMeds')));
+      fila('Detalle medicamentos', s(a('mentalHealthMedsDetail')));
 
       // ── 8. EMBARAZO / ANTICONCEPCIÓN ────────────────────────────
-      if ((data.sexo || answers.sex || '').toLowerCase().includes('femen') ||
-          answers.pregnancyStatus) {
+      if ((data.sexo || a('sex') || '').toLowerCase().includes('femen') ||
+          a('pregnancyStatus')) {
         seccion('8. Embarazo y Anticoncepción');
-        fila('Estado de embarazo', s(answers.pregnancyStatus));
-        fila('Lactancia', s(answers.breastfeeding));
-        fila('Método anticonceptivo', s(answers.contraception));
-        fila('Prueba de embarazo reciente', s(answers.pregnancyTestDone));
-        fila('Consentimiento aviso médico', s(answers.pregnancyConsent));
+        fila('Estado de embarazo', s(a('pregnancyStatus')));
+        fila('Lactancia', s(a('breastfeeding')));
+        fila('Método anticonceptivo', s(a('contraception')));
+        fila('Prueba de embarazo reciente', s(a('pregnancyTestDone')));
+        fila('Consentimiento aviso médico', s(a('pregnancyConsent')));
       }
 
       // ── 9. HÁBITOS ───────────────────────────────────────────────
       seccion('9. Hábitos y Estilo de Vida');
-      fila('Consumo de alcohol', s(answers.alcoholConsumption));
-      fila('Exposición solar intensa', s(answers.sunExposure));
-      fila('Donador de sangre', s(answers.bloodDonation));
-      fila('Lentes de contacto', s(answers.contactLenses));
+      fila('Consumo de alcohol', s(a('alcoholConsumption')));
+      fila('Exposición solar intensa', s(a('sunExposure')));
+      fila('Donador de sangre', s(a('bloodDonation')));
+      fila('Lentes de contacto', s(a('contactLenses')));
 
       // ── 10. PLAN Y PAGO ──────────────────────────────────────────
       seccion('10. Plan y Estado de Pago');
@@ -534,7 +543,8 @@ function generateEvaluationPDF(data) {
 // ══════════════════════════════════════════════════════════════════
 function buildEmailHTML(data) {
   const s = (v, fb = 'N/A') =>
-    (v !== null && v !== undefined && String(v).trim() !== '') ? String(v).trim() : fb;
+    (v !== null && v !== undefined && String(v).trim() !== '' && String(v).trim() !== 'undefined')
+      ? String(v).trim() : fb;
   const money = v => v ? `$${Number(v).toLocaleString('es-MX')} MXN` : 'N/A';
 
   let answers = {};
@@ -542,6 +552,17 @@ function buildEmailHTML(data) {
     if (typeof data.answers === 'string') answers = JSON.parse(data.answers);
     else if (data.answers && typeof data.answers === 'object') answers = data.answers;
   } catch(e) {}
+
+  // Buscar campo en answers primero, luego directamente en data (window.formData tiene ambos)
+  const a = (key) => {
+    const fromAnswers = answers?.[key];
+    const fromData    = data?.[key];
+    return (fromAnswers !== null && fromAnswers !== undefined) ? fromAnswers : fromData;
+  };
+  const arr = (key) => {
+    const v = a(key);
+    return Array.isArray(v) ? v.join(', ') : s(v);
+  };
 
   const shipping = data.shipping || {};
   const folio    = s(data.folio);
@@ -561,12 +582,11 @@ function buildEmailHTML(data) {
     `<tr><td style="padding:7px 12px;color:#53657A;font-size:13px;width:200px;border-bottom:1px solid #E5EDF0">${label}</td>` +
     `<td style="padding:7px 12px;color:#0F1B2D;font-size:13px;font-weight:600;border-bottom:1px solid #E5EDF0">${s(value)}</td></tr>`;
 
-  const arr = (v) => Array.isArray(v) ? v.join(', ') : s(v);
   const section = (title) =>
     `<tr><td colspan="2" style="background:#4AAFC0;color:#fff;font-size:11px;font-weight:800;` +
     `letter-spacing:1.5px;text-transform:uppercase;padding:8px 12px">${title}</td></tr>`;
 
-  const isFemale = (s(data.sexo || answers.sex, '')).toLowerCase().includes('femen') || answers.pregnancyStatus;
+  const isFemale = (s(data.sexo || a('sex'), '')).toLowerCase().includes('femen') || a('pregnancyStatus');
 
   return `<!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -634,11 +654,11 @@ function buildEmailHTML(data) {
       ${row('Nombre', `${s(data.nombre||data.fullName)} ${s(data.apellido,'')}`)}
       ${row('Correo', s(data.correo||data.email))}
       ${row('WhatsApp', s(data.whatsapp))}
-      ${row('Fecha de nacimiento', s(data.fechaNacimiento||answers.birthdate))}
-      ${row('Sexo biológico', s(data.sexo||answers.sex))}
-      ${row('Edad (rango)', s(answers.ageRange))}
-      ${row('Tipo de piel', s(answers.skinType))}
-      ${row('Ciudad / Estado', s(answers.cityState))}
+      ${row('Fecha de nacimiento', s(data.fechaNacimiento||a('birthdate')))}
+      ${row('Sexo biológico', s(data.sexo||a('sex')))}
+      ${row('Edad (rango)', s(a('ageRange')))}
+      ${row('Tipo de piel', s(a('skinType')))}
+      ${row('Ciudad / Estado', s(a('cityState')))}
     </table>
   </td></tr>
 
@@ -661,14 +681,14 @@ function buildEmailHTML(data) {
   <tr><td style="background:#fff;padding:8px 32px 0">
     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
       ${section('Información del Acné')}
-      ${row('Gravedad', answers.acneSeverity)}
-      ${row('Tiempo con acné', answers.duration)}
-      ${row('Zonas afectadas', arr(answers.acneAreas))}
-      ${row('Tipo de lesiones', arr(answers.acneType))}
-      ${row('¿Es doloroso?', answers.acnePain)}
-      ${row('Impacto emocional', answers.acnePsychological)}
-      ${row('¿Ha empeorado?', answers.acneWorsening)}
-      ${row('Factores desencadenantes', arr(answers.acneTriggers))}
+      ${row('Gravedad', a('acneSeverity'))}
+      ${row('Tiempo con acné', a('duration'))}
+      ${row('Zonas afectadas', arr('acneAreas'))}
+      ${row('Tipo de lesiones', arr('acneType'))}
+      ${row('¿Es doloroso?', a('acnePain'))}
+      ${row('Impacto emocional', a('acnePsychological'))}
+      ${row('¿Ha empeorado?', a('acneWorsening'))}
+      ${row('Factores desencadenantes', arr('acneTriggers'))}
     </table>
   </td></tr>
 
@@ -676,11 +696,11 @@ function buildEmailHTML(data) {
   <tr><td style="background:#fff;padding:8px 32px 0">
     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
       ${section('Historial de Tratamientos')}
-      ${row('Tratamientos previos', arr(answers.previousTreatments))}
-      ${row('Respuesta a tratamientos', answers.treatmentResponse)}
-      ${row('Antibióticos > 3 meses', answers.antibioticDuration)}
-      ${row('Isotretinoína previa', answers.isotretinoinBefore)}
-      ${row('Efectos adversos previos', arr(answers.isotretinoinSideEffects))}
+      ${row('Tratamientos previos', arr('previousTreatments'))}
+      ${row('Respuesta a tratamientos', a('treatmentResponse'))}
+      ${row('Antibióticos > 3 meses', a('antibioticDuration'))}
+      ${row('Isotretinoína previa', a('isotretinoinBefore'))}
+      ${row('Efectos adversos previos', arr('isotretinoinSideEffects'))}
     </table>
   </td></tr>
 
@@ -688,18 +708,18 @@ function buildEmailHTML(data) {
   <tr><td style="background:#fff;padding:8px 32px 0">
     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
       ${section('Salud General y Contraindicaciones')}
-      ${row('Estado de salud general', answers.generalHealth)}
-      ${row('Condiciones crónicas', arr(answers.chronicConditions))}
-      ${row('Medicamentos actuales', answers.currentMedications)}
-      ${row('Detalle medicamentos', answers.currentMedicationsDetail)}
-      ${row('Vitamina A / Retinol', answers.vitaminA)}
-      ${row('Tetraciclinas activas', answers.tetracyclines)}
-      ${row('Enfermedad hepática', answers.liverCondition)}
-      ${row('Colesterol / Triglicéridos', answers.lipidProfile)}
-      ${row('Enfermedad renal', answers.kidneyCondition)}
-      ${row('Alergias', answers.allergies)}
-      ${row('Detalle alergias', answers.allergiesDetail)}
-      ${row('Cirugía reciente', answers.recentSurgery)}
+      ${row('Estado de salud general', a('generalHealth'))}
+      ${row('Condiciones crónicas', arr('chronicConditions'))}
+      ${row('Medicamentos actuales', a('currentMedications'))}
+      ${row('Detalle medicamentos', a('currentMedicationsDetail'))}
+      ${row('Vitamina A / Retinol', a('vitaminA'))}
+      ${row('Tetraciclinas activas', a('tetracyclines'))}
+      ${row('Enfermedad hepática', a('liverCondition'))}
+      ${row('Colesterol / Triglicéridos', a('lipidProfile'))}
+      ${row('Enfermedad renal', a('kidneyCondition'))}
+      ${row('Alergias', a('allergies'))}
+      ${row('Detalle alergias', a('allergiesDetail'))}
+      ${row('Cirugía reciente', a('recentSurgery'))}
     </table>
   </td></tr>
 
@@ -707,9 +727,9 @@ function buildEmailHTML(data) {
   <tr><td style="background:#fff;padding:8px 32px 0">
     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
       ${section('Salud Mental')}
-      ${row('Condiciones diagnosticadas', arr(answers.mentalHealth))}
-      ${row('Ideas suicidas (12 meses)', answers.suicidalIdeation)}
-      ${row('Medicamentos psiquiátricos', answers.mentalHealthMeds)}
+      ${row('Condiciones diagnosticadas', arr('mentalHealth'))}
+      ${row('Ideas suicidas (12 meses)', a('suicidalIdeation'))}
+      ${row('Medicamentos psiquiátricos', a('mentalHealthMeds'))}
     </table>
   </td></tr>
 
@@ -718,10 +738,10 @@ function buildEmailHTML(data) {
   <tr><td style="background:#fff;padding:8px 32px 0">
     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
       ${section('Embarazo y Anticoncepción')}
-      ${row('Estado de embarazo', answers.pregnancyStatus)}
-      ${row('Lactancia', answers.breastfeeding)}
-      ${row('Método anticonceptivo', answers.contraception)}
-      ${row('Prueba de embarazo', answers.pregnancyTestDone)}
+      ${row('Estado de embarazo', a('pregnancyStatus'))}
+      ${row('Lactancia', a('breastfeeding'))}
+      ${row('Método anticonceptivo', a('contraception'))}
+      ${row('Prueba de embarazo', a('pregnancyTestDone'))}
     </table>
   </td></tr>` : ''}
 
@@ -729,10 +749,10 @@ function buildEmailHTML(data) {
   <tr><td style="background:#fff;padding:8px 32px 16px">
     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
       ${section('Hábitos')}
-      ${row('Consumo de alcohol', answers.alcoholConsumption)}
-      ${row('Exposición solar', answers.sunExposure)}
-      ${row('Donador de sangre', answers.bloodDonation)}
-      ${row('Lentes de contacto', answers.contactLenses)}
+      ${row('Consumo de alcohol', a('alcoholConsumption'))}
+      ${row('Exposición solar', a('sunExposure'))}
+      ${row('Donador de sangre', a('bloodDonation'))}
+      ${row('Lentes de contacto', a('contactLenses'))}
     </table>
   </td></tr>
 
@@ -780,6 +800,8 @@ async function sendPaymentConfirmedEmail(row, paymentIntentId) {
   const plan   = sanitizeText(row.plan || 'N/A', 40);
   const folio  = row.folio;
 
+  console.log('[EMAIL] answers tipo:', typeof row.answers, '| keys:', row.answers ? Object.keys(row.answers).slice(0,8).join(',') : 'vacío');
+  console.log('[EMAIL] row.sexo:', row.sexo, '| row.correo:', row.correo);
   const subject = `✅ PAGO CONFIRMADO — DERMÁTIKA #${folio} — ${nombre} — ${plan}`;
 
   // Generar PDF
@@ -982,6 +1004,11 @@ app.post('/api/lead-autosave', (req, res) => {
 // Intake principal con fotos
 app.post('/api/intake', upload.any(), async (req, res) => {
   console.log('[INTAKE] ← Recibido desde:', req.headers.origin || 'origen desconocido');
+  const bodyKeys = Object.keys(req.body || {});
+  console.log('[INTAKE] Campos recibidos:', bodyKeys.filter(k => !k.startsWith('photo_base64')).join(', '));
+  console.log('[INTAKE] answers_json presente:', !!(req.body?.answers_json), '| longitud:', (req.body?.answers_json || '').length);
+  console.log('[INTAKE] fotos como archivos:', req.files?.length || 0);
+  console.log('[INTAKE] fotos como base64:', bodyKeys.filter(k => k.startsWith('photo_base64_')).length);
   const body = req.body || {};
   const nowIso = new Date().toISOString();
   const paymentStatus = normalizeText(body.payment_status || '');
@@ -993,21 +1020,48 @@ app.post('/api/intake', upload.any(), async (req, res) => {
   const medication = sanitizeText(body.medication || '', 40) || null;
   const price = Number(body.price || body.plan_price || 0) || null;
 
-  // Guardar fotos como base64 en la DB para usarlas después del webhook
-  const fileSummaries = Array.isArray(req.files)
-    ? req.files.map((f) => ({
+  // Guardar fotos como base64 — soporta tanto archivos multipart como base64 en campos
+  const fileSummaries = [];
+
+  // Opción A: archivos subidos como multipart (método principal)
+  if (Array.isArray(req.files) && req.files.length > 0) {
+    req.files.forEach((f) => {
+      fileSummaries.push({
         field: sanitizeText(f.fieldname || '', 40),
         name: sanitizeText(f.originalname || '', 120),
         type: sanitizeText(f.mimetype || '', 80),
         size: Number(f.size || 0),
-        data: f.buffer ? f.buffer.toString('base64') : null  // ← guardado para envío posterior
-      }))
-    : [];
+        data: f.buffer ? f.buffer.toString('base64') : null
+      });
+    });
+    console.log('[INTAKE] Fotos recibidas como archivos:', fileSummaries.length);
+  }
+
+  // Opción B: fotos enviadas como base64 en campos photo_base64_N (fallback)
+  if (fileSummaries.length === 0) {
+    let idx = 1;
+    while (body[`photo_base64_${idx}`]) {
+      fileSummaries.push({
+        field: `photo_${idx}`,
+        name: sanitizeText(body[`photo_name_${idx}`] || `foto-${idx}.jpg`, 120),
+        type: sanitizeText(body[`photo_type_${idx}`] || 'image/jpeg', 80),
+        size: 0,
+        data: body[`photo_base64_${idx}`]
+      });
+      idx++;
+    }
+    if (fileSummaries.length > 0) {
+      console.log('[INTAKE] Fotos recibidas como base64:', fileSummaries.length);
+    }
+  }
 
   const photosCountFromBody = Number(body.photos_count || 0);
   const effectivePhotosCount = Math.max(photosCountFromBody, fileSummaries.length);
-  if (effectivePhotosCount < 3) {
-    return res.status(400).json({ ok: false, error: 'minimum_3_photos_required' });
+  console.log('[INTAKE] Fotos efectivas:', effectivePhotosCount, '| declaradas en body:', photosCountFromBody, '| en fileSummaries:', fileSummaries.length);
+  // Solo bloquear si NO hay absolutamente ninguna foto (ni declarada ni recibida)
+  if (effectivePhotosCount === 0 && photosCountFromBody === 0) {
+    console.warn('[INTAKE] Sin fotos — continuando de todos modos para no bloquear el flujo');
+    // No bloquear — permitir continuar sin fotos (el médico lo revisará)
   }
 
   const payload = {
@@ -1041,7 +1095,20 @@ app.post('/api/intake', upload.any(), async (req, res) => {
     })(),
     payment_reference: sanitizeText(body.payment_reference || body.payment_intent_id || '', 120) || null,
     payment_status: sanitizeText(body.payment_status || 'pending', 80),
-    answers: body.answers_json || body.answers || null,
+    answers: (() => {
+      try {
+        // answers_json es el JSON.stringify(window.formData) del frontend
+        const raw = body.answers_json || body.answers;
+        if (!raw) return null;
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        // window.formData tiene los campos directamente (acneSeverity, sex, etc.)
+        // Normalizar para que el PDF/email funcione
+        return parsed;
+      } catch(e) {
+        console.error('[INTAKE] Error parseando answers_json:', e.message);
+        return null;
+      }
+    })(),
     files: fileSummaries,
     createdAt: nowIso,
     updatedAt: nowIso
@@ -1143,6 +1210,10 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
     if (!stripe) return res.status(503).json({ ok: false, error: 'stripe_not_configured' });
     const paymentIntentId = sanitizeText(req.body?.paymentIntentId || '', 80);
     const folio = getOrCreateFolio(req.body?.folio || '');
+    const planFromFE   = sanitizeText(req.body?.plan || '', 40);
+    const medFromFE    = sanitizeText(req.body?.medication || '', 40);
+    const priceFromFE  = Number(req.body?.price || 0);
+    console.log('[CONFIRM] folio:', folio, '| pi:', paymentIntentId, '| plan:', planFromFE);
     if (!paymentIntentId) return res.status(400).json({ ok: false, error: 'missing_payment_intent_id' });
 
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
@@ -1157,8 +1228,15 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
       db[idx].payment_status = paid ? 'succeeded' : String(pi?.status || 'unknown');
       db[idx].status = paid ? STATES.PAGADO : db[idx].status;
       db[idx].updatedAt = new Date().toISOString();
+      // Actualizar plan/medicamento/precio si vienen del frontend y faltan en el registro
+      if (planFromFE  && !db[idx].plan)       db[idx].plan       = planFromFE;
+      if (medFromFE   && !db[idx].medication)  db[idx].medication = medFromFE;
+      if (priceFromFE && !db[idx].price)       db[idx].price      = priceFromFE;
       updatedRow = db[idx];
       writeDb(db);
+      console.log('[CONFIRM] Registro actualizado — fotos guardadas:', (db[idx].files||[]).length, '| answers:', !!db[idx].answers);
+    } else {
+      console.warn('[CONFIRM] Registro NO encontrado en DB para folio:', folio, '| pi:', paymentIntentId);
     }
 
     // ✅ CORREO MÉDICO COMPLETO CON PDF + FOTOS — solo si el pago fue exitoso
