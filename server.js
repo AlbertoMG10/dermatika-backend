@@ -255,12 +255,98 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const ADMIN_EMAIL    = process.env.ADMIN_EMAIL || '';
 const MAIL_FROM = 'DERMATIKA <no-reply@dermatika.mx>';
 
+// ══════════════════════════════════════════════════════════════════
+// AIRTABLE — Guardar lead después del pago confirmado
+// Variables: AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_TABLE
+// ══════════════════════════════════════════════════════════════════
+const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY || '';
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || '';
+const AIRTABLE_TABLE   = process.env.AIRTABLE_TABLE   || 'CRM ADMIN';
+
+async function saveToAirtable(row, paymentIntentId) {
+  if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) {
+    console.warn('[AIRTABLE] Variables no configuradas — AIRTABLE_API_KEY o AIRTABLE_BASE_ID faltante');
+    return false;
+  }
+
+  const pa  = row.answers   || {};
+  const pt  = row.shipping  || {};
+  const s   = (v, fb = '') => (v !== null && v !== undefined && String(v).trim() !== '') ? String(v).trim() : fb;
+  const arr = (v) => Array.isArray(v) ? v.join(', ') : s(v);
+
+  // Campos exactos de Airtable — ajusta los nombres si difieren en tu tabla
+  const fields = {
+    'Folio':              s(row.folio),
+    'Nombre':             `${s(row.nombre)} ${s(row.apellido)}`.trim(),
+    'Correo':             s(row.correo),
+    'WhatsApp':           s(row.whatsapp),
+    'Sexo':               s(row.sexo || pa.sex || pa.sexo),
+    'Fecha Nacimiento':   s(row.fechaNacimiento || pa.birthdate),
+    'Edad':               s(pa.ageRange),
+    'Plan':               s(row.plan),
+    'Medicamento':        s(row.medication),
+    'Precio':             Number(row.price || 0),
+    'Estado Pago':        'PAGADO',
+    'Referencia Stripe':  s(paymentIntentId),
+    'Estado Paciente':    s(row.status),
+    'Severidad Acné':     s(pa.acneSeverity || pa.acne),
+    'Duración Acné':      s(pa.duration || pa.tiempo),
+    'Zonas Afectadas':    arr(pa.acneAreas || pa.zonas),
+    'Tratamientos Previos': arr(pa.previousTreatments),
+    'Isotretinoína Previa': s(pa.isotretinoinBefore),
+    'Medicamentos Actuales': s(pa.currentMedications),
+    'Alergias':           s(pa.allergies),
+    'Salud General':      s(pa.generalHealth),
+    'Dirección':          s(pt.shipAddress1),
+    'Colonia':            s(pt.shipNeighborhood),
+    'CP':                 s(pt.shipZip),
+    'Municipio':          s(pt.shipMunicipality),
+    'Estado Dirección':   s(pt.shipState),
+    'Ciudad':             s(pt.shipCity),
+    'Fecha Registro':     new Date().toISOString(),
+    'Notas':              `Evaluación completada y pagada. Folio: ${s(row.folio)}`
+  };
+
+  // Eliminar campos vacíos para no generar errores en Airtable
+  Object.keys(fields).forEach(k => {
+    if (fields[k] === '' || fields[k] === null || fields[k] === undefined) delete fields[k];
+  });
+
+  console.log('[AIRTABLE] Intentando guardar — folio:', s(row.folio), '| tabla:', AIRTABLE_TABLE, '| campos:', Object.keys(fields).length);
+
+  try {
+    const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type':  'application/json'
+      },
+      body: JSON.stringify({ fields })
+    });
+    const data = await res.json();
+    if (res.ok && data.id) {
+      console.log('[AIRTABLE] ✅ Guardado OK — record id:', data.id, '| folio:', s(row.folio));
+      return data.id;
+    } else {
+      console.error('[AIRTABLE ERROR] Status:', res.status, '| Error:', JSON.stringify(data?.error || data));
+      return false;
+    }
+  } catch (err) {
+    console.error('[AIRTABLE ERROR] Excepción al guardar:', err.message || err);
+    return false;
+  }
+}
+
 // ── Log de arranque: verificar variables críticas ──
 console.log('[CONFIG] STRIPE_SECRET_KEY:', stripeSecret ? '✅ configurada' : '❌ FALTA');
 console.log('[CONFIG] STRIPE_PUBLIC_KEY:', stripePublic ? '✅ configurada' : '❌ FALTA');
 console.log('[CONFIG] RESEND_API_KEY:', RESEND_API_KEY ? '✅ configurada' : '❌ FALTA');
 console.log('[CONFIG] ADMIN_EMAIL:', ADMIN_EMAIL || '❌ FALTA');
 console.log('[CONFIG] FRONTEND_ORIGIN:', process.env.FRONTEND_ORIGIN || '❌ FALTA');
+console.log('[CONFIG] AIRTABLE_API_KEY:', AIRTABLE_API_KEY ? '✅ configurada' : '❌ FALTA');
+console.log('[CONFIG] AIRTABLE_BASE_ID:', AIRTABLE_BASE_ID || '❌ FALTA');
+console.log('[CONFIG] AIRTABLE_TABLE:', AIRTABLE_TABLE);
 
 async function sendInternalMail(subject, text, attachments = [], htmlContent = null) {
   if (!RESEND_API_KEY || !ADMIN_EMAIL) {
@@ -321,241 +407,344 @@ async function sendInternalMail(subject, text, attachments = [], htmlContent = n
 function generateEvaluationPDF(data) {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ margin: 48, size: 'A4' });
+      const doc = new PDFDocument({ margin: 50, size: 'A4', bufferPages: true });
       const chunks = [];
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      const TEAL   = '#4AAFC0';
-      const INK    = '#0F1B2D';
-      const MUTED  = '#53657A';
-      const LINE   = '#E5EDF0';
-      const W      = doc.page.width - 96; // ancho usable
+      const TEAL  = '#4AAFC0';
+      const INK   = '#0F1B2D';
+      const MUTED = '#53657A';
+      const LIGHT = '#F6FAFC';
+      const LINE  = '#D8E8EC';
+      const W     = doc.page.width - 100; // 50px margen cada lado
 
-      // Helper: fallback a N/A
-      const s = (v, fallback = 'N/A') =>
-        (v !== null && v !== undefined && String(v).trim() !== '' && String(v).trim() !== 'undefined') 
-          ? String(v).trim() : fallback;
+      // ── Helpers ───────────────────────────────────────────────
+      const s = (v, fb = 'N/A') =>
+        (v !== null && v !== undefined && String(v).trim() !== '' && String(v).trim() !== 'undefined')
+          ? String(v).trim() : fb;
       const money = v => v ? `$${Number(v).toLocaleString('es-MX')} MXN` : 'N/A';
+      const arr   = v => Array.isArray(v) ? v.join(', ') : s(v);
 
-      // Helper: busca en answers, luego en data, soporta aliases
+      let answers = {};
+      try {
+        if (typeof data.answers === 'string') answers = JSON.parse(data.answers);
+        else if (data.answers && typeof data.answers === 'object') answers = data.answers;
+      } catch(e) {}
+
+      const shipping = data.shipping || {};
+
       const ALIASES = {
-        acneSeverity: ['acneSeverity','acne'],
-        duration: ['duration','tiempo'],
-        acneAreas: ['acneAreas','zonas'],
-        sex: ['sex','sexo','gender'],
-        fullName: ['fullName','nombre'],
-        email: ['email','correo','leadEmail'],
-        phone: ['phone','whatsapp','leadWhatsapp'],
-        cityState: ['cityState','ciudad','state'],
-        shipAddress1: ['shipAddress1','shippingStreet','address'],
-        shipNeighborhood: ['shipNeighborhood','shippingNeighborhood','colonia'],
-        shipZip: ['shipZip','shippingPostalCode','zip'],
-        shipMunicipality: ['shipMunicipality','shippingMunicipality','municipality'],
-        shipCity: ['shipCity','city'],
-        shipState: ['shipState','shippingState','state'],
+        acneSeverity:     ['acneSeverity','acne'],
+        duration:         ['duration','tiempo'],
+        acneAreas:        ['acneAreas','zonas'],
+        sex:              ['sex','sexo','gender'],
+        email:            ['email','correo','leadEmail'],
+        phone:            ['phone','whatsapp','leadWhatsapp'],
+        shipAddress1:     ['shipAddress1','shippingStreet'],
+        shipNeighborhood: ['shipNeighborhood','shippingNeighborhood'],
+        shipZip:          ['shipZip','shippingPostalCode'],
+        shipMunicipality: ['shipMunicipality','shippingMunicipality'],
+        shipState:        ['shipState','shippingState'],
       };
       const a = (key) => {
         const keys = [key, ...(ALIASES[key] || [])];
         for (const k of keys) {
           const v = answers?.[k] ?? data?.[k];
-          if (v !== null && v !== undefined && String(v).trim() !== '' && String(v).trim() !== 'undefined') return v;
+          if (v !== null && v !== undefined && String(v||'').trim() !== '' && String(v||'').trim() !== 'undefined') return v;
         }
-        // También buscar en shipping
-        const ship = data?.shipping || answers?.shipping || {};
         for (const k of keys) {
-          if (ship[k] !== null && ship[k] !== undefined && String(ship[k]||'').trim()) return ship[k];
+          if (shipping[k] && String(shipping[k]).trim()) return shipping[k];
         }
         return undefined;
       };
 
-      // ── ENCABEZADO ──────────────────────────────────────────────
-      doc.rect(0, 0, doc.page.width, 90).fill(INK);
-      doc.fillColor('#FFFFFF').fontSize(22).font('Helvetica-Bold')
-         .text('DERMÁTIKA', 48, 28, { lineBreak: false });
-      doc.fillColor(TEAL).fontSize(10).font('Helvetica')
-         .text('TRATAMIENTOS DERMATOLÓGICOS', 48, 54);
-      doc.fillColor('#FFFFFF').fontSize(9)
-         .text('Evaluación Médica — Documento Confidencial', 48, 70);
-
-      // Folio + fecha arriba derecha
       const folio = s(data.folio);
       const fecha = data.createdAt
         ? new Date(data.createdAt).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })
         : new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
-      doc.fillColor('#FFFFFF').fontSize(9).font('Helvetica-Bold')
-         .text(`Folio: ${folio}`, doc.page.width - 200, 28, { width: 160, align: 'right' });
-      doc.font('Helvetica').fontSize(8)
-         .text(fecha, doc.page.width - 200, 44, { width: 160, align: 'right' });
 
-      doc.moveDown(3.5);
-
-      // ── HELPER: sección ──────────────────────────────────────────
-      function seccion(titulo) {
-        doc.moveDown(0.6);
-        doc.rect(48, doc.y, W, 22).fill(TEAL);
-        doc.fillColor('#FFFFFF').fontSize(10).font('Helvetica-Bold')
-           .text(titulo.toUpperCase(), 56, doc.y - 17);
-        doc.moveDown(0.8);
+      // ── HELPER: verificar espacio y agregar nueva página ──────
+      function checkSpace(needed = 80) {
+        if (doc.y + needed > doc.page.height - 70) {
+          doc.addPage();
+          doc.y = 50;
+        }
       }
 
-      // ── HELPER: fila clave-valor ──────────────────────────────────
-      function fila(label, valor) {
-        const y = doc.y;
+      // ── HELPER: separador entre secciones ─────────────────────
+      function spacer(height = 14) {
+        checkSpace(height + 10);
+        doc.moveDown(0);
+        doc.y += height;
+      }
+
+      // ── HELPER: sección con fondo teal ────────────────────────
+      function seccion(titulo, iconChar = '') {
+        checkSpace(50);
+        doc.y += 6;
+        doc.rect(50, doc.y, W, 26).fill(INK);
+        doc.fillColor(TEAL).fontSize(9).font('Helvetica-Bold')
+           .text(iconChar ? `${iconChar}  ${titulo.toUpperCase()}` : titulo.toUpperCase(),
+                 62, doc.y - 20, { width: W - 20 });
+        doc.y += 12;
+      }
+
+      // ── HELPER: fila clave-valor con fondo alternado ──────────
+      let rowCount = 0;
+      function fila(label, valor, opts = {}) {
+        const displayVal = opts.isArr ? arr(valor) : s(valor);
+        if (!opts.showEmpty && displayVal === 'N/A') return;
+        checkSpace(26);
+        rowCount++;
+        const bg = rowCount % 2 === 0 ? LIGHT : '#FFFFFF';
+        const rowH = 22;
+        doc.rect(50, doc.y, W, rowH).fill(bg);
         doc.fillColor(MUTED).fontSize(8.5).font('Helvetica')
-           .text(label + ':', 48, y, { width: 170, continued: false });
+           .text(label + ':', 58, doc.y - 16, { width: 175 });
         doc.fillColor(INK).fontSize(8.5).font('Helvetica-Bold')
-           .text(s(valor), 230, y, { width: W - 182 });
-        doc.moveDown(0.3);
-        // Línea divisoria suave
-        doc.moveTo(48, doc.y).lineTo(48 + W, doc.y).strokeColor(LINE).lineWidth(0.5).stroke();
-        doc.moveDown(0.3);
+           .text(displayVal, 240, doc.y - 16, { width: W - 196 });
+        doc.y += 6;
+        doc.moveTo(50, doc.y).lineTo(50 + W, doc.y)
+           .strokeColor(LINE).lineWidth(0.4).stroke();
+        doc.y += 2;
       }
 
-      // ── ESTADO DEL PACIENTE ──────────────────────────────────────
-      const estado = s(data.eligibility_status || data.status, 'candidato').toLowerCase();
-      let estadoLabel = 'CANDIDATO';
-      let estadoColor = '#16a34a';
-      if (estado.includes('revision') || estado.includes('revisión')) {
-        estadoLabel = 'REQUIERE REVISIÓN MÉDICA'; estadoColor = '#d97706';
-      } else if (estado.includes('no_apto') || estado.includes('no_aprobado')) {
-        estadoLabel = 'NO CANDIDATO'; estadoColor = '#dc2626';
+      // ════════════════════════════════════════════════════════
+      // ENCABEZADO
+      // ════════════════════════════════════════════════════════
+      doc.rect(0, 0, doc.page.width, 86).fill(INK);
+
+      // Logo y nombre
+      doc.fillColor(TEAL).fontSize(24).font('Helvetica-Bold')
+         .text('DERMÁTIKA', 50, 18, { lineBreak: false });
+      doc.fillColor('#FFFFFF').fontSize(8).font('Helvetica')
+         .text('  *', 50 + doc.widthOfString('DERMÁTIKA', { fontSize: 24, font: 'Helvetica-Bold' }) + 2, 18, { lineBreak: false });
+      doc.fillColor('rgba(255,255,255,0.5)').fontSize(9).font('Helvetica')
+         .text('TRATAMIENTOS DERMATOLÓGICOS', 50, 46);
+      doc.fillColor('rgba(255,255,255,0.35)').fontSize(7.5)
+         .text('Evaluación Médica — Documento Confidencial', 50, 60);
+
+      // Folio y fecha — derecha
+      doc.fillColor(TEAL).fontSize(9).font('Helvetica-Bold')
+         .text(`Folio: ${folio}`, doc.page.width - 220, 18, { width: 175, align: 'right' });
+      doc.fillColor('rgba(255,255,255,0.6)').fontSize(8).font('Helvetica')
+         .text(fecha, doc.page.width - 220, 34, { width: 175, align: 'right' });
+
+      doc.y = 100;
+
+      // ════════════════════════════════════════════════════════
+      // BADGE DE ESTADO
+      // ════════════════════════════════════════════════════════
+      const estadoRaw = s(data.eligibility_status || data.status, 'candidato').toLowerCase();
+      let estadoLabel = 'CANDIDATO APROBADO';
+      let estadoColor = '#16a34a'; let estadoBg = '#f0fdf4'; let estadoBorder = '#86efac';
+      if (estadoRaw.includes('revision') || estadoRaw.includes('revisión')) {
+        estadoLabel = 'REQUIERE REVISIÓN MÉDICA'; estadoColor = '#d97706'; estadoBg = '#fffbeb'; estadoBorder = '#fcd34d';
+      } else if (estadoRaw.includes('no_apto') || estadoRaw.includes('no_aprobado') || estadoRaw.includes('no candidato')) {
+        estadoLabel = 'NO CANDIDATO'; estadoColor = '#dc2626'; estadoBg = '#fef2f2'; estadoBorder = '#fca5a5';
+      } else if (estadoRaw.includes('pagado') || estadoRaw.includes('pago')) {
+        estadoLabel = 'PAGO CONFIRMADO — CANDIDATO'; estadoColor = '#16a34a'; estadoBg = '#f0fdf4'; estadoBorder = '#86efac';
       }
 
-      doc.rect(48, doc.y, W, 36).fill(estadoColor + '15');
-      doc.rect(48, doc.y, 4, 36).fill(estadoColor);
-      doc.fillColor(estadoColor).fontSize(13).font('Helvetica-Bold')
-         .text(estadoLabel, 62, doc.y - 28);
+      doc.rect(50, doc.y, W, 38).fill(estadoBg);
+      doc.rect(50, doc.y, 5, 38).fill(estadoColor);
+      doc.rect(50, doc.y, W, 38).undash().stroke(estadoBorder);
+      doc.fillColor(estadoColor).fontSize(12).font('Helvetica-Bold')
+         .text(estadoLabel, 64, doc.y - 28);
       doc.fillColor(MUTED).fontSize(8).font('Helvetica')
-         .text('Estado de elegibilidad para isotretinoína', 62, doc.y - 4);
-      doc.moveDown(1.8);
+         .text('Estado de elegibilidad para tratamiento con isotretinoína', 64, doc.y - 12);
+      doc.y += 22;
 
-      // Parsear respuestas del cuestionario
-      let answers = {};
-      try {
-        if (typeof data.answers === 'string') answers = JSON.parse(data.answers);
-        else if (data.answers && typeof data.answers === 'object') answers = data.answers;
-      } catch(e) { answers = {}; }
+      spacer(18);
 
-      const shipping = data.shipping || {};
+      // ════════════════════════════════════════════════════════
+      // SECCIÓN 1: DATOS DEL PACIENTE
+      // ════════════════════════════════════════════════════════
+      rowCount = 0;
+      seccion('1. Datos del Paciente', '👤');
+      spacer(4);
+      fila('Nombre completo',   `${s(data.nombre || a('fullName'))} ${s(data.apellido || '','')}`.trim(), {showEmpty:true});
+      fila('Correo electrónico', s(data.correo   || a('email')), {showEmpty:true});
+      fila('WhatsApp',           s(data.whatsapp || a('phone')), {showEmpty:true});
+      fila('Sexo biológico',     s(data.sexo     || a('sex')));
+      fila('Fecha de nacimiento',s(data.fechaNacimiento || a('birthdate')));
+      fila('Edad (rango)',       s(a('ageRange')));
+      fila('Tipo de piel',       s(a('skinType')));
 
-      // ── 1. DATOS PERSONALES ──────────────────────────────────────
-      seccion('1. Datos del Paciente');
-      fila('Nombre completo', `${s(data.nombre || data.fullName || a('fullName'))} ${s(data.apellido || a('apellido') || '','')}`.trim().trim());
-      fila('Correo electrónico', s(data.correo || data.email || a('email')));
-      fila('WhatsApp', s(data.whatsapp || a('phone')));
-      fila('Fecha de nacimiento', s(data.fechaNacimiento || a('birthdate')));
-      fila('Sexo biológico', s(data.sexo || a('sex')));
-      fila('Edad (rango)', s(a('ageRange')));
-      fila('Tipo de piel', s(a('skinType')));
-      fila('Ciudad / Estado', s(a('cityState')));
+      spacer(20);
 
-      // ── 2. DIRECCIÓN ─────────────────────────────────────────────
-      if (shipping && (shipping.address || shipping.colonia || shipping.zip)) {
-        seccion('2. Dirección de Envío');
-        fila('Calle y número', s(shipping?.shipAddress1 || shipping?.address || a('shipAddress1')));
-        fila('Colonia', s(shipping?.shipNeighborhood || shipping?.colonia || a('shipNeighborhood')));
-        fila('Código postal', s(shipping?.shipZip || shipping?.zip || a('shipZip')));
-        fila('Municipio / Alcaldía', s(shipping?.shipMunicipality || shipping?.municipality || a('shipMunicipality')));
-        fila('Ciudad', s(shipping?.shipCity || shipping?.city || a('shipCity')));
-        fila('Estado', s(shipping?.shipState || shipping?.state || a('shipState')));
-        fila('Referencias', s(shipping.references));
+      // ════════════════════════════════════════════════════════
+      // SECCIÓN 2: DIRECCIÓN DE ENVÍO
+      // ════════════════════════════════════════════════════════
+      const hasShipping = shipping && (shipping.shipAddress1 || shipping.shipZip || a('shipAddress1'));
+      if (hasShipping) {
+        rowCount = 0;
+        seccion('2. Dirección de Envío', '📦');
+        spacer(4);
+        fila('Nombre completo', s(shipping.shipFullName   || a('shipFullName')));
+        fila('Calle y número',  s(shipping.shipAddress1   || a('shipAddress1')));
+        fila('Número exterior', s(shipping.shipExterior   || a('shipExterior')));
+        fila('Interior / Refs', s(shipping.shipAddress2   || a('shipAddress2')));
+        fila('Código postal',   s(shipping.shipZip        || a('shipZip')), {showEmpty:true});
+        fila('Colonia',         s(shipping.shipNeighborhood || a('shipNeighborhood')), {showEmpty:true});
+        fila('Municipio / Alcaldía', s(shipping.shipMunicipality || a('shipMunicipality')), {showEmpty:true});
+        fila('Ciudad',          s(shipping.shipCity        || a('shipCity')));
+        fila('Estado',          s(shipping.shipState       || a('shipState')), {showEmpty:true});
+        fila('Referencias',     s(shipping.references     || a('references')));
+        spacer(20);
       }
 
-      // ── 3. INFORMACIÓN DEL ACNÉ ──────────────────────────────────
-      seccion('3. Información del Acné');
-      fila('Gravedad del acné', s(a('acneSeverity')));
-      fila('Tiempo con acné', s(a('duration')));
-      fila('Zonas afectadas', Array.isArray(a('acneAreas')) ? a('acneAreas').join(', ') : s(a('acneAreas')));
-      fila('Tipo de lesiones', Array.isArray(a('acneType')) ? a('acneType').join(', ') : s(a('acneType')));
-      fila('¿Es doloroso?', s(a('acnePain')));
-      fila('Impacto emocional', s(a('acnePsychological')));
-      fila('¿Ha empeorado?', s(a('acneWorsening')));
-      fila('Factores desencadenantes', Array.isArray(a('acneTriggers')) ? a('acneTriggers').join(', ') : s(a('acneTriggers')));
+      // ════════════════════════════════════════════════════════
+      // SECCIÓN 3: INFORMACIÓN DEL ACNÉ
+      // ════════════════════════════════════════════════════════
+      rowCount = 0;
+      seccion('3. Información del Acné', '🔬');
+      spacer(4);
+      fila('Gravedad del acné',  s(a('acneSeverity')));
+      fila('Tiempo con acné',    s(a('duration')));
+      fila('Zonas afectadas',    arr(a('acneAreas')));
+      fila('Tipo de lesiones',   arr(a('acneType')));
+      fila('¿Es doloroso?',      s(a('acnePain')));
+      fila('Impacto emocional',  s(a('acnePsychological')));
+      fila('¿Ha empeorado?',     s(a('acneWorsening')));
+      fila('Factores desencadenantes', arr(a('acneTriggers')));
 
-      // ── 4. HISTORIAL DE TRATAMIENTOS ─────────────────────────────
-      seccion('4. Historial de Tratamientos');
-      fila('Tratamientos previos', Array.isArray(a('previousTreatments')) ? a('previousTreatments').join(', ') : s(a('previousTreatments')));
-      fila('Respuesta a tratamientos', s(a('treatmentResponse')));
-      fila('Antibióticos > 3 meses', s(a('antibioticDuration')));
-      fila('Isotretinoína previa', s(a('isotretinoinBefore')));
-      fila('Efectos adversos previos', Array.isArray(a('isotretinoinSideEffects')) ? a('isotretinoinSideEffects').join(', ') : s(a('isotretinoinSideEffects')));
+      spacer(20);
 
-      // ── 5. SALUD GENERAL ─────────────────────────────────────────
-      seccion('5. Salud General');
-      fila('Estado de salud general', s(a('generalHealth')));
-      fila('Condiciones crónicas', Array.isArray(a('chronicConditions')) ? a('chronicConditions').join(', ') : s(a('chronicConditions')));
-      fila('Medicamentos actuales', s(a('currentMedications')));
-      fila('Detalle medicamentos', s(a('currentMedicationsDetail')));
-      fila('Vitamina A / Retinol', s(a('vitaminA')));
-      fila('Tetraciclinas activas', s(a('tetracyclines')));
+      // ════════════════════════════════════════════════════════
+      // SECCIÓN 4: HISTORIAL DE TRATAMIENTOS
+      // ════════════════════════════════════════════════════════
+      rowCount = 0;
+      seccion('4. Historial de Tratamientos', '💊');
+      spacer(4);
+      fila('Tratamientos previos',    arr(a('previousTreatments')));
+      fila('Respuesta a tratamientos',s(a('treatmentResponse')));
+      fila('Antibióticos > 3 meses',  s(a('antibioticDuration')));
+      fila('Isotretinoína previa',     s(a('isotretinoinBefore')));
+      fila('Efectos adversos previos', arr(a('isotretinoinSideEffects')));
 
-      // ── 6. CONTRAINDICACIONES ────────────────────────────────────
-      seccion('6. Contraindicaciones');
-      fila('Enfermedad hepática', s(a('liverCondition')));
+      spacer(20);
+
+      // ════════════════════════════════════════════════════════
+      // SECCIÓN 5: SALUD GENERAL
+      // ════════════════════════════════════════════════════════
+      rowCount = 0;
+      seccion('5. Salud General', '❤️');
+      spacer(4);
+      fila('Estado de salud general',  s(a('generalHealth')));
+      fila('Condiciones crónicas',      arr(a('chronicConditions')));
+      fila('Medicamentos actuales',     s(a('currentMedications')));
+      fila('Detalle medicamentos',      s(a('currentMedicationsDetail')));
+      fila('Vitamina A / Retinol',      s(a('vitaminA')));
+      fila('Tetraciclinas activas',     s(a('tetracyclines')));
+
+      spacer(20);
+
+      // ════════════════════════════════════════════════════════
+      // SECCIÓN 6: CONTRAINDICACIONES
+      // ════════════════════════════════════════════════════════
+      rowCount = 0;
+      seccion('6. Contraindicaciones', '⚠️');
+      spacer(4);
+      fila('Enfermedad hepática',      s(a('liverCondition')));
       fila('Colesterol / Triglicéridos', s(a('lipidProfile')));
-      fila('Enfermedad renal', s(a('kidneyCondition')));
-      fila('Alergias', s(a('allergies')));
-      fila('Detalle alergias', s(a('allergiesDetail')));
-      fila('Cirugía reciente', s(a('recentSurgery')));
+      fila('Enfermedad renal',          s(a('kidneyCondition')));
+      fila('Alergias',                  s(a('allergies')));
+      fila('Detalle alergias',          s(a('allergiesDetail')));
+      fila('Cirugía reciente',          s(a('recentSurgery')));
+      fila('Donador de sangre',         s(a('bloodDonation')));
 
-      // ── 7. SALUD MENTAL ──────────────────────────────────────────
-      seccion('7. Salud Mental');
-      fila('Condiciones diagnosticadas', Array.isArray(a('mentalHealth')) ? a('mentalHealth').join(', ') : s(a('mentalHealth')));
-      fila('Ideas suicidas (12 meses)', s(a('suicidalIdeation')));
-      fila('Medicamentos psiquiátricos', s(a('mentalHealthMeds')));
-      fila('Detalle medicamentos', s(a('mentalHealthMedsDetail')));
+      spacer(20);
 
-      // ── 8. EMBARAZO / ANTICONCEPCIÓN ────────────────────────────
-      if ((data.sexo || a('sex') || '').toLowerCase().includes('femen') ||
-          a('pregnancyStatus')) {
-        seccion('8. Embarazo y Anticoncepción');
-        fila('Estado de embarazo', s(a('pregnancyStatus')));
-        fila('Lactancia', s(a('breastfeeding')));
-        fila('Método anticonceptivo', s(a('contraception')));
-        fila('Prueba de embarazo reciente', s(a('pregnancyTestDone')));
-        fila('Consentimiento aviso médico', s(a('pregnancyConsent')));
+      // ════════════════════════════════════════════════════════
+      // SECCIÓN 7: SALUD MENTAL
+      // ════════════════════════════════════════════════════════
+      rowCount = 0;
+      seccion('7. Salud Mental', '🧠');
+      spacer(4);
+      fila('Condiciones diagnosticadas', arr(a('mentalHealth')));
+      fila('Ideas suicidas (12 meses)',   s(a('suicidalIdeation')));
+      fila('Medicamentos psiquiátricos',  s(a('mentalHealthMeds')));
+      fila('Detalle medicamentos',        s(a('mentalHealthMedsDetail')));
+
+      spacer(20);
+
+      // ════════════════════════════════════════════════════════
+      // SECCIÓN 8: EMBARAZO Y ANTICONCEPCIÓN (solo mujeres)
+      // ════════════════════════════════════════════════════════
+      const isFemale = (s(data.sexo||a('sex')||'')).toLowerCase().includes('femen') || a('pregnancyStatus');
+      if (isFemale) {
+        rowCount = 0;
+        seccion('8. Embarazo y Anticoncepción', '🌸');
+        spacer(4);
+        fila('Estado de embarazo',       s(a('pregnancyStatus')));
+        fila('Lactancia',                s(a('breastfeeding')));
+        fila('Método anticonceptivo',    s(a('contraception')));
+        fila('Prueba de embarazo',       s(a('pregnancyTestDone')));
+        fila('Consentimiento aviso',     s(a('pregnancyConsent')));
+        spacer(20);
       }
 
-      // ── 9. HÁBITOS ───────────────────────────────────────────────
-      seccion('9. Hábitos y Estilo de Vida');
-      fila('Consumo de alcohol', s(a('alcoholConsumption')));
-      fila('Exposición solar intensa', s(a('sunExposure')));
-      fila('Donador de sangre', s(a('bloodDonation')));
-      fila('Lentes de contacto', s(a('contactLenses')));
+      // ════════════════════════════════════════════════════════
+      // SECCIÓN 9: HÁBITOS
+      // ════════════════════════════════════════════════════════
+      rowCount = 0;
+      seccion('9. Hábitos y Estilo de Vida', '🌿');
+      spacer(4);
+      fila('Consumo de alcohol',   s(a('alcoholConsumption')));
+      fila('Exposición solar',     s(a('sunExposure')));
+      fila('Lentes de contacto',   s(a('contactLenses')));
 
-      // ── 10. PLAN Y PAGO ──────────────────────────────────────────
-      seccion('10. Plan y Estado de Pago');
-      fila('Plan seleccionado', s(data.plan));
-      fila('Medicamento', s(data.medication));
-      fila('Precio', money(data.price));
-      fila('Estado del pago', s(data.payment_status));
-      fila('Referencia de pago', s(data.payment_reference));
-      fila('Folio DERMÁTIKA', folio);
-      fila('Fecha/Hora de evaluación', fecha);
+      spacer(20);
 
-      // ── AVISO LEGAL ──────────────────────────────────────────────
-      doc.moveDown(1.2);
-      doc.rect(48, doc.y, W, 42).fill('#FFF8F0');
-      doc.rect(48, doc.y, 3, 42).fill('#d97706');
-      doc.fillColor('#92650a').fontSize(8).font('Helvetica-Bold')
-         .text('AVISO IMPORTANTE', 60, doc.y - 36);
-      doc.font('Helvetica').fillColor('#7a5c00')
+      // ════════════════════════════════════════════════════════
+      // SECCIÓN 10: PLAN Y PAGO
+      // ════════════════════════════════════════════════════════
+      rowCount = 0;
+      seccion('10. Plan y Estado de Pago', '💳');
+      spacer(4);
+      fila('Plan seleccionado',  s(data.plan),              {showEmpty:true});
+      fila('Medicamento',        s(data.medication),        {showEmpty:true});
+      fila('Precio',             money(data.price),         {showEmpty:true});
+      fila('Estado del pago',    s(data.payment_status),    {showEmpty:true});
+      fila('Referencia Stripe',  s(data.payment_reference), {showEmpty:true});
+      fila('Folio DERMÁTIKA',    folio,                     {showEmpty:true});
+      fila('Fecha evaluación',   fecha,                     {showEmpty:true});
+
+      spacer(24);
+
+      // ════════════════════════════════════════════════════════
+      // AVISO LEGAL
+      // ════════════════════════════════════════════════════════
+      checkSpace(70);
+      doc.rect(50, doc.y, W, 56).fill('#FFF8F0');
+      doc.rect(50, doc.y, 4, 56).fill('#d97706');
+      doc.fillColor('#92650a').fontSize(9).font('Helvetica-Bold')
+         .text('⚠  AVISO IMPORTANTE', 64, doc.y - 48);
+      doc.fillColor('#7a5c00').fontSize(8).font('Helvetica')
          .text(
-           'Información sujeta a revisión y aprobación médica. Este documento es confidencial y ' +
-           'generado automáticamente. El tratamiento será confirmado únicamente después de la ' +
-           'revisión por un profesional médico autorizado de DERMÁTIKA.',
-           60, doc.y - 20, { width: W - 20, lineBreak: true }
+           'Información sujeta a revisión y aprobación médica. Este documento es estrictamente confidencial ' +
+           'y generado de forma automática. El inicio del tratamiento será confirmado únicamente tras la revisión ' +
+           'por un profesional médico autorizado de DERMÁTIKA. No automedicar.',
+           64, doc.y - 30, { width: W - 24, lineBreak: true }
          );
-      doc.moveDown(0.8);
+      doc.y += 10;
 
-      // ── PIE DE PÁGINA ────────────────────────────────────────────
-      doc.fontSize(7.5).fillColor(MUTED).font('Helvetica')
-         .text(
-           `DERMÁTIKA — dermatika.mx | Generado: ${fecha} | Folio: ${folio}`,
-           48, doc.page.height - 40, { width: W, align: 'center' }
-         );
+      // ════════════════════════════════════════════════════════
+      // PIE DE PÁGINA EN TODAS LAS PÁGINAS
+      // ════════════════════════════════════════════════════════
+      const totalPages = doc.bufferedPageRange().count;
+      for (let i = 0; i < totalPages; i++) {
+        doc.switchToPage(i);
+        doc.rect(0, doc.page.height - 28, doc.page.width, 28).fill(INK);
+        doc.fillColor('rgba(255,255,255,0.4)').fontSize(7).font('Helvetica')
+           .text(
+             `DERMÁTIKA · dermatika.mx  |  Folio: ${folio}  |  Generado: ${fecha}  |  Página ${i+1} de ${totalPages}`,
+             50, doc.page.height - 18, { width: W, align: 'center' }
+           );
+      }
 
       doc.end();
     } catch(err) {
@@ -1422,10 +1611,20 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
       } catch (mailErr) {
         console.error('[CONFIRM] ❌ Error enviando correo:', mailErr.message || mailErr);
       }
+      // Guardar en Airtable después del correo
+      try {
+        await saveToAirtable(updatedRow, paymentIntentId);
+      } catch(atErr) {
+        console.error('[AIRTABLE ERROR] Error al llamar saveToAirtable:', atErr.message);
+      }
     } else if (!paid) {
       console.log('[CONFIRM] Pago NO exitoso — status:', pi?.status, '— NO se envía correo');
     } else {
       console.log('[CONFIRM] Correo ya enviado previamente para folio:', folio);
+      // Intentar Airtable igual (puede que no se haya guardado la primera vez)
+      if (updatedRow) {
+        try { await saveToAirtable(updatedRow, paymentIntentId); } catch(e) {}
+      }
     }
 
     return res.json({ ok: true, paid, status: pi?.status || 'unknown', folio });
