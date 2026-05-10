@@ -1105,52 +1105,72 @@ app.post('/api/intake', upload.any(), async (req, res) => {
     // No bloquear — permitir continuar sin fotos (el médico lo revisará)
   }
 
-  // ── Parsear answers_json que contiene TODO el window.formData del frontend ──
+  // ── 1. Parsear answers_json (cuestionario completo) ──────────────────────
   let parsedAnswers = {};
   try {
     const raw = body.answers_json || body.answers;
     if (raw) {
       parsedAnswers = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      console.log('[INTAKE] answers_json parseado — keys:', Object.keys(parsedAnswers).slice(0,10).join(','));
+      console.log('[INTAKE] answers_json parseado — keys:', Object.keys(parsedAnswers).length,
+        '| muestra:', Object.keys(parsedAnswers).slice(0,8).join(','));
     } else {
-      console.warn('[INTAKE] answers_json VACÍO — body keys:', Object.keys(body).join(','));
+      console.warn('[INTAKE] answers_json VACÍO — body keys:', Object.keys(body).filter(k=>!k.startsWith('photo')).join(','));
     }
   } catch(e) {
     console.error('[INTAKE] Error parseando answers_json:', e.message);
   }
 
-  // Extraer datos del paciente desde answers (window.formData) o directamente del body
-  // El frontend pone los datos en window.formData y los serializa en answers_json
-  const pa = parsedAnswers; // alias corto
-  const nombre    = sanitizeText(pa.nombre || pa.identityName || body.nombre || body.patient_name || body.identityName || '', 120);
-  const apellido  = sanitizeText(pa.apellido || pa.identityLastName || body.apellido || body.identityLastName || '', 120);
-  const correo    = sanitizeText(pa.correo || pa.email || pa.leadEmail || body.correo || body.email || body.leadEmail || '', 120);
-  const whatsapp  = normalizePhone(pa.whatsapp || pa.phone || pa.leadWhatsapp || body.whatsapp || body.phone || body.leadWhatsapp || '');
-  const fechaNac  = sanitizeText(pa.fechaNacimiento || pa.birthdate || body.fechaNacimiento || body.birthdate || '', 80);
-  const sexo      = sanitizeText(pa.sexo || pa.sex || pa.gender || body.sexo || body.sex || body.gender || '', 20);
+  // ── 2. Parsear patient JSON (datos del paciente separados) ─────────────
+  let patientData = {};
+  try {
+    const rawPatient = body.patient;
+    if (rawPatient) {
+      patientData = typeof rawPatient === 'string' ? JSON.parse(rawPatient) : rawPatient;
+      console.log('[INTAKE] patient parseado — nombre:', patientData.nombre, '| correo:', patientData.correo);
+    }
+  } catch(e) {
+    console.error('[INTAKE] Error parseando patient:', e.message);
+  }
 
-  console.log('[INTAKE] Paciente — nombre:', nombre || '(vacío)', '| correo:', correo || '(vacío)', '| sexo:', sexo || '(vacío)');
-  console.log('[INTAKE] Acné — severidad:', pa.acneSeverity || pa.acne || '(vacío)', '| duración:', pa.duration || pa.tiempo || '(vacío)');
+  // ── 3. Extraer datos del paciente — prioridad: patient > answers > body ──
+  const pa = parsedAnswers;
+  const pt = patientData;
 
-  // Reconstruir shipping desde answers o body
+  const nombre   = sanitizeText(pt.nombre   || pa.nombre   || pa.identityName  || body.nombre   || body.patient_name || '', 120);
+  const apellido = sanitizeText(pt.apellido || pa.apellido || pa.identityLastName || body.apellido || '', 120);
+  const correo   = sanitizeText(pt.correo   || pa.correo   || pa.email || pa.leadEmail || body.correo || body.email || '', 120);
+  const whatsapp = normalizePhone(pt.whatsapp || pa.whatsapp || pa.phone || pa.leadWhatsapp || body.whatsapp || body.phone || '');
+  const fechaNac = sanitizeText(pt.fechaNacimiento || pa.fechaNacimiento || pa.birthdate || body.fechaNacimiento || body.birthdate || '', 80);
+  const sexo     = sanitizeText(pt.sexo || pa.sexo || pa.sex || pa.gender || body.sexo || body.sex || '', 20);
+
+  console.log('[INTAKE] Paciente → nombre:', nombre||'(vacío)', '| correo:', correo||'(vacío)', '| sexo:', sexo||'(vacío)');
+  console.log('[INTAKE] Acné → severidad:', pa.acneSeverity||pa.acne||'(vacío)', '| duración:', pa.duration||pa.tiempo||'(vacío)');
+  console.log('[INTAKE] Dirección → calle:', pt.shipAddress1||pa.shipAddress1||'(vacío)', '| colonia:', pt.shipNeighborhood||pa.shipNeighborhood||'(vacío)');
+
+  // Reconstruir shipping — prioridad: patient > answers > body
   const shippingData = (() => {
+    if (pt && Object.keys(pt).some(k=>k.startsWith('ship'))) {
+      // patient JSON tiene los campos de envío directamente
+      const s = {};
+      ['shipFullName','shipAddress1','shipExterior','shipAddress2','shipZip',
+       'shipNeighborhood','shipNeighborhoodManual','shipMunicipality','shipCity','shipState','references']
+        .forEach(k => { const v = pt[k]||pa[k]||body[k]; if(v&&String(v).trim()) s[k]=sanitizeText(String(v),200); });
+      if (Object.keys(s).length > 0) return s;
+    }
     if (pa.shipping && typeof pa.shipping === 'object') return pa.shipping;
     if (body.shipping && typeof body.shipping === 'object') return body.shipping;
     const s = {};
     const shipMap = {
-      shipFullName: [pa.shipFullName, body.shipFullName],
-      shipEmail: [pa.shipEmail, body.shipEmail],
-      shipWhatsapp: [pa.shipWhatsapp, body.shipWhatsapp],
-      shipAddress1: [pa.shipAddress1, pa.shippingStreet, body.shipAddress1, body.shippingStreet],
-      shipExterior: [pa.shipExterior, body.shipExterior],
-      shipAddress2: [pa.shipAddress2, body.shipAddress2],
-      shipZip: [pa.shipZip, pa.shippingPostalCode, body.shipZip, body.shippingPostalCode],
-      shipNeighborhood: [pa.shipNeighborhood, pa.shippingNeighborhood, body.shipNeighborhood, body.shippingNeighborhood],
-      shipNeighborhoodManual: [pa.shipNeighborhoodManual, body.shipNeighborhoodManual],
-      shipMunicipality: [pa.shipMunicipality, pa.shippingMunicipality, body.shipMunicipality, body.shippingMunicipality],
-      shipCity: [pa.shipCity, body.shipCity],
-      shipState: [pa.shipState, pa.shippingState, body.shipState, body.shippingState],
-      references: [pa.references, body.references]
+      shipFullName:         [pt.shipFullName,         pa.shipFullName,         body.shipFullName],
+      shipAddress1:         [pt.shipAddress1,         pa.shipAddress1,         pa.shippingStreet,  body.shipAddress1],
+      shipExterior:         [pt.shipExterior,         pa.shipExterior,         body.shipExterior],
+      shipZip:              [pt.shipZip,              pa.shipZip,              pa.shippingPostalCode, body.shipZip],
+      shipNeighborhood:     [pt.shipNeighborhood,     pa.shipNeighborhood,     pa.shippingNeighborhood, body.shipNeighborhood],
+      shipNeighborhoodManual:[pt.shipNeighborhoodManual, pa.shipNeighborhoodManual, body.shipNeighborhoodManual],
+      shipMunicipality:     [pt.shipMunicipality,     pa.shipMunicipality,     pa.shippingMunicipality, body.shipMunicipality],
+      shipCity:             [pt.shipCity,             pa.shipCity,             body.shipCity],
+      shipState:            [pt.shipState,            pa.shipState,            pa.shippingState, body.shipState],
+      references:           [pt.references,           pa.references,           body.references]
     };
     Object.entries(shipMap).forEach(([k, vals]) => {
       const v = vals.find(x => x && String(x).trim());
@@ -1158,6 +1178,7 @@ app.post('/api/intake', upload.any(), async (req, res) => {
     });
     return Object.keys(s).length > 0 ? s : null;
   })();
+  console.log('[INTAKE] Shipping → calle:', shippingData?.shipAddress1||'(vacío)', '| CP:', shippingData?.shipZip||'(vacío)');
 
   const payload = {
     id: makeId('intake'),
