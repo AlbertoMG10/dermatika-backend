@@ -407,34 +407,53 @@ async function sendInternalMail(subject, text, attachments = [], htmlContent = n
 function generateEvaluationPDF(data) {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ margin: 50, size: 'A4', bufferPages: true });
+      const doc = new PDFDocument({
+        margin: 56,
+        size: 'A4',
+        bufferPages: true,
+        info: { Title: 'Evaluacion DERMATIKA', Author: 'DERMATIKA' }
+      });
       const chunks = [];
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      const TEAL  = '#4AAFC0';
-      const INK   = '#0F1B2D';
-      const MUTED = '#53657A';
-      const LIGHT = '#F6FAFC';
-      const LINE  = '#D8E8EC';
-      const W     = doc.page.width - 100; // 50px margen cada lado
+      // ── Medidas ───────────────────────────────────────────
+      const ML = 56;           // margen izquierdo
+      const MR = 56;           // margen derecho
+      const PW = doc.page.width;
+      const PH = doc.page.height;
+      const CW = PW - ML - MR; // ancho del contenido
+      const BOTTOM_MARGIN = 70;
 
-      // ── Helpers ───────────────────────────────────────────────
-      const s = (v, fb = 'N/A') =>
-        (v !== null && v !== undefined && String(v).trim() !== '' && String(v).trim() !== 'undefined')
-          ? String(v).trim() : fb;
-      const money = v => v ? `$${Number(v).toLocaleString('es-MX')} MXN` : 'N/A';
-      const arr   = v => Array.isArray(v) ? v.join(', ') : s(v);
+      // ── Colores ───────────────────────────────────────────
+      const C_INK   = '#0F1B2D';
+      const C_TEAL  = '#4AAFC0';
+      const C_MUTED = '#53657A';
+      const C_LIGHT = '#F0F7FA';
+      const C_LINE  = '#D0E4EA';
 
-      let answers = {};
+      // ── Helpers ───────────────────────────────────────────
+      const sv = (v, fb) => {
+        fb = fb !== undefined ? fb : 'N/A';
+        if (v === null || v === undefined) return fb;
+        const str = String(v).trim();
+        if (str === '' || str === 'undefined' || str === 'null') return fb;
+        return str;
+      };
+      const av = v => Array.isArray(v) ? v.join(', ') : sv(v);
+      const money = v => v ? '$' + Number(v).toLocaleString('es-MX') + ' MXN' : 'N/A';
+
+      // Parsear answers
+      let ans = {};
       try {
-        if (typeof data.answers === 'string') answers = JSON.parse(data.answers);
-        else if (data.answers && typeof data.answers === 'object') answers = data.answers;
+        if (typeof data.answers === 'string') ans = JSON.parse(data.answers);
+        else if (data.answers && typeof data.answers === 'object') ans = data.answers;
       } catch(e) {}
 
-      const shipping = data.shipping || {};
+      const ship = data.shipping || {};
 
+      // Buscar valor con aliases
       const ALIASES = {
         acneSeverity:     ['acneSeverity','acne'],
         duration:         ['duration','tiempo'],
@@ -442,307 +461,261 @@ function generateEvaluationPDF(data) {
         sex:              ['sex','sexo','gender'],
         email:            ['email','correo','leadEmail'],
         phone:            ['phone','whatsapp','leadWhatsapp'],
-        shipAddress1:     ['shipAddress1','shippingStreet'],
-        shipNeighborhood: ['shipNeighborhood','shippingNeighborhood'],
-        shipZip:          ['shipZip','shippingPostalCode'],
-        shipMunicipality: ['shipMunicipality','shippingMunicipality'],
-        shipState:        ['shipState','shippingState'],
+        shipAddress1:     ['shipAddress1','shippingStreet','address'],
+        shipNeighborhood: ['shipNeighborhood','shippingNeighborhood','colonia'],
+        shipZip:          ['shipZip','shippingPostalCode','zip'],
+        shipMunicipality: ['shipMunicipality','shippingMunicipality','municipality'],
+        shipState:        ['shipState','shippingState','state'],
       };
-      const a = (key) => {
+      const a = key => {
         const keys = [key, ...(ALIASES[key] || [])];
         for (const k of keys) {
-          const v = answers?.[k] ?? data?.[k];
-          if (v !== null && v !== undefined && String(v||'').trim() !== '' && String(v||'').trim() !== 'undefined') return v;
+          const v = ans?.[k] ?? data?.[k];
+          if (v !== null && v !== undefined && sv(v) !== 'N/A') return v;
         }
         for (const k of keys) {
-          if (shipping[k] && String(shipping[k]).trim()) return shipping[k];
+          if (ship[k] && sv(ship[k]) !== 'N/A') return ship[k];
         }
         return undefined;
       };
 
-      const folio = s(data.folio);
+      const folio = sv(data.folio, 'S/N');
       const fecha = data.createdAt
         ? new Date(data.createdAt).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })
         : new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
 
-      // ── HELPER: verificar espacio y agregar nueva página ──────
-      function checkSpace(needed = 80) {
-        if (doc.y + needed > doc.page.height - 70) {
-          doc.addPage();
-          doc.y = 50;
-        }
+      // ── Cursor y control de pagina ────────────────────────
+      let curY = ML;
+
+      function newPage() {
+        doc.addPage();
+        curY = ML;
+        drawPageFooter();
       }
 
-      // ── HELPER: separador entre secciones ─────────────────────
-      function spacer(height = 14) {
-        checkSpace(height + 10);
-        doc.moveDown(0);
-        doc.y += height;
+      function checkY(needed) {
+        if (curY + needed > PH - BOTTOM_MARGIN) newPage();
       }
 
-      // ── HELPER: sección con fondo teal ────────────────────────
-      function seccion(titulo, iconChar = '') {
-        checkSpace(50);
-        doc.y += 6;
-        doc.rect(50, doc.y, W, 26).fill(INK);
-        doc.fillColor(TEAL).fontSize(9).font('Helvetica-Bold')
-           .text(iconChar ? `${iconChar}  ${titulo.toUpperCase()}` : titulo.toUpperCase(),
-                 62, doc.y - 20, { width: W - 20 });
-        doc.y += 12;
+      // ── Pie de pagina (se dibuja al final en todas las pags)
+      function drawPageFooter() {
+        // se agrega al terminar
       }
 
-      // ── HELPER: fila clave-valor con fondo alternado ──────────
-      let rowCount = 0;
-      function fila(label, valor, opts = {}) {
-        const displayVal = opts.isArr ? arr(valor) : s(valor);
-        if (!opts.showEmpty && displayVal === 'N/A') return;
-        checkSpace(26);
-        rowCount++;
-        const bg = rowCount % 2 === 0 ? LIGHT : '#FFFFFF';
-        const rowH = 22;
-        doc.rect(50, doc.y, W, rowH).fill(bg);
-        doc.fillColor(MUTED).fontSize(8.5).font('Helvetica')
-           .text(label + ':', 58, doc.y - 16, { width: 175 });
-        doc.fillColor(INK).fontSize(8.5).font('Helvetica-Bold')
-           .text(displayVal, 240, doc.y - 16, { width: W - 196 });
-        doc.y += 6;
-        doc.moveTo(50, doc.y).lineTo(50 + W, doc.y)
-           .strokeColor(LINE).lineWidth(0.4).stroke();
-        doc.y += 2;
+      // ── Encabezado ────────────────────────────────────────
+      function drawHeader() {
+        // Fondo oscuro
+        doc.rect(0, 0, PW, 80).fill(C_INK);
+
+        // Nombre
+        doc.font('Helvetica-Bold').fontSize(20).fillColor(C_TEAL)
+           .text('DERMATIKA', ML, 18);
+        doc.font('Helvetica').fontSize(8).fillColor('#AABBCC')
+           .text('TRATAMIENTOS DERMATOLOGICOS', ML, 44);
+        doc.font('Helvetica').fontSize(7.5).fillColor('#889AAA')
+           .text('Evaluacion Medica - Documento Confidencial', ML, 57);
+
+        // Folio y fecha (derecha)
+        doc.font('Helvetica-Bold').fontSize(8.5).fillColor(C_TEAL)
+           .text('Folio: ' + folio, PW - MR - 180, 22, { width: 180, align: 'right' });
+        doc.font('Helvetica').fontSize(7.5).fillColor('#889AAA')
+           .text(fecha, PW - MR - 180, 36, { width: 180, align: 'right' });
+
+        curY = 96;
       }
 
-      // ════════════════════════════════════════════════════════
-      // ENCABEZADO
-      // ════════════════════════════════════════════════════════
-      doc.rect(0, 0, doc.page.width, 86).fill(INK);
+      // ── Badge de estado ───────────────────────────────────
+      function drawEstado() {
+        const raw = sv(data.eligibility_status || data.status, 'candidato').toLowerCase();
+        let label = 'CANDIDATO APROBADO';
+        let color = '#16a34a';
+        if (raw.includes('revision')) { label = 'REQUIERE REVISION MEDICA'; color = '#d97706'; }
+        else if (raw.includes('no_ap') || raw.includes('no candidato')) { label = 'NO CANDIDATO'; color = '#dc2626'; }
+        else if (raw.includes('pagado') || raw.includes('pago')) { label = 'PAGO CONFIRMADO'; color = '#16a34a'; }
 
-      // Logo y nombre
-      doc.fillColor(TEAL).fontSize(24).font('Helvetica-Bold')
-         .text('DERMÁTIKA', 50, 18, { lineBreak: false });
-      doc.fillColor('#FFFFFF').fontSize(8).font('Helvetica')
-         .text('  *', 50 + doc.widthOfString('DERMÁTIKA', { fontSize: 24, font: 'Helvetica-Bold' }) + 2, 18, { lineBreak: false });
-      doc.fillColor('rgba(255,255,255,0.5)').fontSize(9).font('Helvetica')
-         .text('TRATAMIENTOS DERMATOLÓGICOS', 50, 46);
-      doc.fillColor('rgba(255,255,255,0.35)').fontSize(7.5)
-         .text('Evaluación Médica — Documento Confidencial', 50, 60);
-
-      // Folio y fecha — derecha
-      doc.fillColor(TEAL).fontSize(9).font('Helvetica-Bold')
-         .text(`Folio: ${folio}`, doc.page.width - 220, 18, { width: 175, align: 'right' });
-      doc.fillColor('rgba(255,255,255,0.6)').fontSize(8).font('Helvetica')
-         .text(fecha, doc.page.width - 220, 34, { width: 175, align: 'right' });
-
-      doc.y = 100;
-
-      // ════════════════════════════════════════════════════════
-      // BADGE DE ESTADO
-      // ════════════════════════════════════════════════════════
-      const estadoRaw = s(data.eligibility_status || data.status, 'candidato').toLowerCase();
-      let estadoLabel = 'CANDIDATO APROBADO';
-      let estadoColor = '#16a34a'; let estadoBg = '#f0fdf4'; let estadoBorder = '#86efac';
-      if (estadoRaw.includes('revision') || estadoRaw.includes('revisión')) {
-        estadoLabel = 'REQUIERE REVISIÓN MÉDICA'; estadoColor = '#d97706'; estadoBg = '#fffbeb'; estadoBorder = '#fcd34d';
-      } else if (estadoRaw.includes('no_apto') || estadoRaw.includes('no_aprobado') || estadoRaw.includes('no candidato')) {
-        estadoLabel = 'NO CANDIDATO'; estadoColor = '#dc2626'; estadoBg = '#fef2f2'; estadoBorder = '#fca5a5';
-      } else if (estadoRaw.includes('pagado') || estadoRaw.includes('pago')) {
-        estadoLabel = 'PAGO CONFIRMADO — CANDIDATO'; estadoColor = '#16a34a'; estadoBg = '#f0fdf4'; estadoBorder = '#86efac';
+        checkY(44);
+        doc.rect(ML, curY, CW, 36).fill('#F8FAFB').stroke(C_LINE);
+        doc.rect(ML, curY, 5, 36).fill(color);
+        doc.font('Helvetica-Bold').fontSize(11).fillColor(color)
+           .text(label, ML + 14, curY + 7);
+        doc.font('Helvetica').fontSize(8).fillColor(C_MUTED)
+           .text('Estado de elegibilidad para isotretinaina', ML + 14, curY + 22);
+        curY += 48;
       }
 
-      doc.rect(50, doc.y, W, 38).fill(estadoBg);
-      doc.rect(50, doc.y, 5, 38).fill(estadoColor);
-      doc.rect(50, doc.y, W, 38).undash().stroke(estadoBorder);
-      doc.fillColor(estadoColor).fontSize(12).font('Helvetica-Bold')
-         .text(estadoLabel, 64, doc.y - 28);
-      doc.fillColor(MUTED).fontSize(8).font('Helvetica')
-         .text('Estado de elegibilidad para tratamiento con isotretinoína', 64, doc.y - 12);
-      doc.y += 22;
+      // ── Titulo de seccion ─────────────────────────────────
+      function seccion(titulo) {
+        checkY(40);
+        curY += 10; // espacio antes del titulo
+        doc.rect(ML, curY, CW, 24).fill(C_INK);
+        doc.font('Helvetica-Bold').fontSize(9).fillColor('#FFFFFF')
+           .text(titulo.toUpperCase(), ML + 10, curY + 7);
+        curY += 30;
+      }
 
-      spacer(18);
+      // ── Campo: Etiqueta: Valor ────────────────────────────
+      function campo(label, valor, esArray) {
+        const displayVal = esArray ? av(valor) : sv(valor);
+        if (!displayVal || displayVal === 'N/A') return; // omitir vacios
 
-      // ════════════════════════════════════════════════════════
-      // SECCIÓN 1: DATOS DEL PACIENTE
-      // ════════════════════════════════════════════════════════
-      rowCount = 0;
-      seccion('1. Datos del Paciente', '👤');
-      spacer(4);
-      fila('Nombre completo',   `${s(data.nombre || a('fullName'))} ${s(data.apellido || '','')}`.trim(), {showEmpty:true});
-      fila('Correo electrónico', s(data.correo   || a('email')), {showEmpty:true});
-      fila('WhatsApp',           s(data.whatsapp || a('phone')), {showEmpty:true});
-      fila('Sexo biológico',     s(data.sexo     || a('sex')));
-      fila('Fecha de nacimiento',s(data.fechaNacimiento || a('birthdate')));
-      fila('Edad (rango)',       s(a('ageRange')));
-      fila('Tipo de piel',       s(a('skinType')));
+        // Calcular altura necesaria
+        const labelText = label + ':';
+        const valText   = displayVal;
 
-      spacer(20);
+        checkY(30);
 
-      // ════════════════════════════════════════════════════════
-      // SECCIÓN 2: DIRECCIÓN DE ENVÍO
-      // ════════════════════════════════════════════════════════
-      const hasShipping = shipping && (shipping.shipAddress1 || shipping.shipZip || a('shipAddress1'));
-      if (hasShipping) {
-        rowCount = 0;
-        seccion('2. Dirección de Envío', '📦');
-        spacer(4);
-        fila('Nombre completo', s(shipping.shipFullName   || a('shipFullName')));
-        fila('Calle y número',  s(shipping.shipAddress1   || a('shipAddress1')));
-        fila('Número exterior', s(shipping.shipExterior   || a('shipExterior')));
-        fila('Interior / Refs', s(shipping.shipAddress2   || a('shipAddress2')));
-        fila('Código postal',   s(shipping.shipZip        || a('shipZip')), {showEmpty:true});
-        fila('Colonia',         s(shipping.shipNeighborhood || a('shipNeighborhood')), {showEmpty:true});
-        fila('Municipio / Alcaldía', s(shipping.shipMunicipality || a('shipMunicipality')), {showEmpty:true});
-        fila('Ciudad',          s(shipping.shipCity        || a('shipCity')));
-        fila('Estado',          s(shipping.shipState       || a('shipState')), {showEmpty:true});
-        fila('Referencias',     s(shipping.references     || a('references')));
-        spacer(20);
+        // Etiqueta en color muted
+        doc.font('Helvetica-Bold').fontSize(8.5).fillColor(C_MUTED)
+           .text(labelText, ML, curY, { width: CW, continued: false });
+
+        curY += 13;
+        checkY(20);
+
+        // Valor en color oscuro, con wrap automatico
+        const before = doc.y;
+        doc.font('Helvetica').fontSize(9).fillColor(C_INK)
+           .text(valText, ML + 10, curY, { width: CW - 10, lineBreap: true });
+
+        // Avanzar cursor segun el texto renderizado
+        curY = doc.y + 6;
+
+        // Linea separadora ligera
+        checkY(6);
+        doc.moveTo(ML, curY).lineTo(ML + CW, curY)
+           .strokeColor(C_LINE).lineWidth(0.4).stroke();
+        curY += 8;
       }
 
       // ════════════════════════════════════════════════════════
-      // SECCIÓN 3: INFORMACIÓN DEL ACNÉ
+      // GENERAR PDF
       // ════════════════════════════════════════════════════════
-      rowCount = 0;
-      seccion('3. Información del Acné', '🔬');
-      spacer(4);
-      fila('Gravedad del acné',  s(a('acneSeverity')));
-      fila('Tiempo con acné',    s(a('duration')));
-      fila('Zonas afectadas',    arr(a('acneAreas')));
-      fila('Tipo de lesiones',   arr(a('acneType')));
-      fila('¿Es doloroso?',      s(a('acnePain')));
-      fila('Impacto emocional',  s(a('acnePsychological')));
-      fila('¿Ha empeorado?',     s(a('acneWorsening')));
-      fila('Factores desencadenantes', arr(a('acneTriggers')));
+      drawHeader();
+      drawEstado();
 
-      spacer(20);
+      // ── 1. Datos del paciente ─────────────────────────────
+      seccion('1. Datos del paciente');
+      campo('Nombre completo',
+        (sv(data.nombre || a('fullName'), '') + ' ' + sv(data.apellido || '', '')).trim() || 'N/A');
+      campo('Correo electronico', sv(data.correo || a('email')));
+      campo('WhatsApp',           sv(data.whatsapp || a('phone')));
+      campo('Sexo biologico',     sv(data.sexo || a('sex')));
+      campo('Fecha de nacimiento',sv(data.fechaNacimiento || a('birthdate')));
+      campo('Edad',               sv(a('ageRange')));
+      campo('Tipo de piel',       sv(a('skinType')));
 
-      // ════════════════════════════════════════════════════════
-      // SECCIÓN 4: HISTORIAL DE TRATAMIENTOS
-      // ════════════════════════════════════════════════════════
-      rowCount = 0;
-      seccion('4. Historial de Tratamientos', '💊');
-      spacer(4);
-      fila('Tratamientos previos',    arr(a('previousTreatments')));
-      fila('Respuesta a tratamientos',s(a('treatmentResponse')));
-      fila('Antibióticos > 3 meses',  s(a('antibioticDuration')));
-      fila('Isotretinoína previa',     s(a('isotretinoinBefore')));
-      fila('Efectos adversos previos', arr(a('isotretinoinSideEffects')));
+      // ── 2. Direccion de envio ─────────────────────────────
+      const hayDireccion = sv(ship.shipAddress1 || a('shipAddress1'), '') !== '';
+      if (hayDireccion) {
+        seccion('2. Direccion de Envio');
+        campo('Calle y numero',   sv(ship.shipAddress1   || a('shipAddress1')));
+        campo('Numero exterior',  sv(ship.shipExterior   || a('shipExterior')));
+        campo('Codigo postal',    sv(ship.shipZip        || a('shipZip')));
+        campo('Colonia',          sv(ship.shipNeighborhood || a('shipNeighborhood')));
+        campo('Municipio / Alcaldia', sv(ship.shipMunicipality || a('shipMunicipality')));
+        campo('Ciudad',           sv(ship.shipCity        || a('shipCity')));
+        campo('Estado',           sv(ship.shipState       || a('shipState')));
+        campo('Referencias',      sv(ship.references     || a('references')));
+      }
 
-      spacer(20);
+      // ── 3. Informacion del acne ───────────────────────────
+      seccion('3. Informacion del Acne');
+      campo('Gravedad del acne',   sv(a('acneSeverity')));
+      campo('Tiempo con acne',     sv(a('duration')));
+      campo('Zonas afectadas',     av(a('acneAreas')));
+      campo('Tipo de lesiones',    av(a('acneType')));
+      campo('Es doloroso',         sv(a('acnePain')));
+      campo('Impacto emocional',   sv(a('acnePsychological')));
+      campo('Ha empeorado',        sv(a('acneWorsening')));
+      campo('Factores desencadenantes', av(a('acneTriggers')));
 
-      // ════════════════════════════════════════════════════════
-      // SECCIÓN 5: SALUD GENERAL
-      // ════════════════════════════════════════════════════════
-      rowCount = 0;
-      seccion('5. Salud General', '❤️');
-      spacer(4);
-      fila('Estado de salud general',  s(a('generalHealth')));
-      fila('Condiciones crónicas',      arr(a('chronicConditions')));
-      fila('Medicamentos actuales',     s(a('currentMedications')));
-      fila('Detalle medicamentos',      s(a('currentMedicationsDetail')));
-      fila('Vitamina A / Retinol',      s(a('vitaminA')));
-      fila('Tetraciclinas activas',     s(a('tetracyclines')));
+      // ── 4. Historial de tratamientos ──────────────────────
+      seccion('4. Historial de Tratamientos');
+      campo('Tratamientos previos',    av(a('previousTreatments')));
+      campo('Respuesta a tratamientos',sv(a('treatmentResponse')));
+      campo('Antibioticos mas de 3 meses', sv(a('antibioticDuration')));
+      campo('Isotretinaina previa',    sv(a('isotretinoinBefore')));
+      campo('Efectos adversos previos',av(a('isotretinoinSideEffects')));
 
-      spacer(20);
+      // ── 5. Salud general ──────────────────────────────────
+      seccion('5. Salud General');
+      campo('Estado de salud general', sv(a('generalHealth')));
+      campo('Condiciones cronicas',    av(a('chronicConditions')));
+      campo('Medicamentos actuales',   sv(a('currentMedications')));
+      campo('Detalle medicamentos',    sv(a('currentMedicationsDetail')));
+      campo('Vitamina A o Retinol',    sv(a('vitaminA')));
+      campo('Tetraciclinas activas',   sv(a('tetracyclines')));
 
-      // ════════════════════════════════════════════════════════
-      // SECCIÓN 6: CONTRAINDICACIONES
-      // ════════════════════════════════════════════════════════
-      rowCount = 0;
-      seccion('6. Contraindicaciones', '⚠️');
-      spacer(4);
-      fila('Enfermedad hepática',      s(a('liverCondition')));
-      fila('Colesterol / Triglicéridos', s(a('lipidProfile')));
-      fila('Enfermedad renal',          s(a('kidneyCondition')));
-      fila('Alergias',                  s(a('allergies')));
-      fila('Detalle alergias',          s(a('allergiesDetail')));
-      fila('Cirugía reciente',          s(a('recentSurgery')));
-      fila('Donador de sangre',         s(a('bloodDonation')));
+      // ── 6. Contraindicaciones ─────────────────────────────
+      seccion('6. Contraindicaciones');
+      campo('Enfermedad hepatica',     sv(a('liverCondition')));
+      campo('Colesterol y Trigliceridos', sv(a('lipidProfile')));
+      campo('Enfermedad renal',        sv(a('kidneyCondition')));
+      campo('Alergias',                sv(a('allergies')));
+      campo('Detalle alergias',        sv(a('allergiesDetail')));
+      campo('Cirugia reciente',        sv(a('recentSurgery')));
+      campo('Donador de sangre',       sv(a('bloodDonation')));
 
-      spacer(20);
+      // ── 7. Salud mental ───────────────────────────────────
+      seccion('7. Salud Mental');
+      campo('Condiciones diagnosticadas', av(a('mentalHealth')));
+      campo('Ideas suicidas (12 meses)',  sv(a('suicidalIdeation')));
+      campo('Medicamentos psiquiatricos', sv(a('mentalHealthMeds')));
+      campo('Detalle medicamentos',       sv(a('mentalHealthMedsDetail')));
 
-      // ════════════════════════════════════════════════════════
-      // SECCIÓN 7: SALUD MENTAL
-      // ════════════════════════════════════════════════════════
-      rowCount = 0;
-      seccion('7. Salud Mental', '🧠');
-      spacer(4);
-      fila('Condiciones diagnosticadas', arr(a('mentalHealth')));
-      fila('Ideas suicidas (12 meses)',   s(a('suicidalIdeation')));
-      fila('Medicamentos psiquiátricos',  s(a('mentalHealthMeds')));
-      fila('Detalle medicamentos',        s(a('mentalHealthMedsDetail')));
-
-      spacer(20);
-
-      // ════════════════════════════════════════════════════════
-      // SECCIÓN 8: EMBARAZO Y ANTICONCEPCIÓN (solo mujeres)
-      // ════════════════════════════════════════════════════════
-      const isFemale = (s(data.sexo||a('sex')||'')).toLowerCase().includes('femen') || a('pregnancyStatus');
+      // ── 8. Embarazo y anticoncepcion (solo si aplica) ─────
+      const isFemale = sv(data.sexo || a('sex'), '').toLowerCase().includes('femen')
+                    || sv(a('pregnancyStatus'), '') !== 'N/A';
       if (isFemale) {
-        rowCount = 0;
-        seccion('8. Embarazo y Anticoncepción', '🌸');
-        spacer(4);
-        fila('Estado de embarazo',       s(a('pregnancyStatus')));
-        fila('Lactancia',                s(a('breastfeeding')));
-        fila('Método anticonceptivo',    s(a('contraception')));
-        fila('Prueba de embarazo',       s(a('pregnancyTestDone')));
-        fila('Consentimiento aviso',     s(a('pregnancyConsent')));
-        spacer(20);
+        seccion('8. Embarazo y Anticoncepcion');
+        campo('Estado de embarazo',    sv(a('pregnancyStatus')));
+        campo('Lactancia',             sv(a('breastfeeding')));
+        campo('Metodo anticonceptivo', sv(a('contraception')));
+        campo('Prueba de embarazo',    sv(a('pregnancyTestDone')));
+        campo('Consentimiento aviso',  sv(a('pregnancyConsent')));
       }
 
-      // ════════════════════════════════════════════════════════
-      // SECCIÓN 9: HÁBITOS
-      // ════════════════════════════════════════════════════════
-      rowCount = 0;
-      seccion('9. Hábitos y Estilo de Vida', '🌿');
-      spacer(4);
-      fila('Consumo de alcohol',   s(a('alcoholConsumption')));
-      fila('Exposición solar',     s(a('sunExposure')));
-      fila('Lentes de contacto',   s(a('contactLenses')));
+      // ── 9. Habitos ────────────────────────────────────────
+      seccion('9. Habitos');
+      campo('Consumo de alcohol',  sv(a('alcoholConsumption')));
+      campo('Exposicion solar',    sv(a('sunExposure')));
+      campo('Lentes de contacto',  sv(a('contactLenses')));
 
-      spacer(20);
+      // ── 10. Plan y pago ───────────────────────────────────
+      seccion('10. Plan y Estado de Pago');
+      campo('Plan seleccionado',  sv(data.plan));
+      campo('Medicamento',        sv(data.medication));
+      campo('Precio',             money(data.price));
+      campo('Estado del pago',    sv(data.payment_status));
+      campo('Referencia Stripe',  sv(data.payment_reference));
+      campo('Folio DERMATIKA',    folio);
+      campo('Fecha de evaluacion',fecha);
 
-      // ════════════════════════════════════════════════════════
-      // SECCIÓN 10: PLAN Y PAGO
-      // ════════════════════════════════════════════════════════
-      rowCount = 0;
-      seccion('10. Plan y Estado de Pago', '💳');
-      spacer(4);
-      fila('Plan seleccionado',  s(data.plan),              {showEmpty:true});
-      fila('Medicamento',        s(data.medication),        {showEmpty:true});
-      fila('Precio',             money(data.price),         {showEmpty:true});
-      fila('Estado del pago',    s(data.payment_status),    {showEmpty:true});
-      fila('Referencia Stripe',  s(data.payment_reference), {showEmpty:true});
-      fila('Folio DERMÁTIKA',    folio,                     {showEmpty:true});
-      fila('Fecha evaluación',   fecha,                     {showEmpty:true});
-
-      spacer(24);
-
-      // ════════════════════════════════════════════════════════
-      // AVISO LEGAL
-      // ════════════════════════════════════════════════════════
-      checkSpace(70);
-      doc.rect(50, doc.y, W, 56).fill('#FFF8F0');
-      doc.rect(50, doc.y, 4, 56).fill('#d97706');
-      doc.fillColor('#92650a').fontSize(9).font('Helvetica-Bold')
-         .text('⚠  AVISO IMPORTANTE', 64, doc.y - 48);
-      doc.fillColor('#7a5c00').fontSize(8).font('Helvetica')
+      // ── Aviso legal ───────────────────────────────────────
+      checkY(70);
+      curY += 12;
+      doc.rect(ML, curY, CW, 52).fill('#FFFBF0');
+      doc.rect(ML, curY, 4, 52).fill('#D97706');
+      doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#92650A')
+         .text('AVISO IMPORTANTE', ML + 12, curY + 8);
+      doc.font('Helvetica').fontSize(8).fillColor('#7A5C00')
          .text(
-           'Información sujeta a revisión y aprobación médica. Este documento es estrictamente confidencial ' +
-           'y generado de forma automática. El inicio del tratamiento será confirmado únicamente tras la revisión ' +
-           'por un profesional médico autorizado de DERMÁTIKA. No automedicar.',
-           64, doc.y - 30, { width: W - 24, lineBreak: true }
+           'Informacion sujeta a revision y aprobacion medica. Este documento es estrictamente ' +
+           'confidencial y generado automaticamente. El tratamiento sera confirmado unicamente ' +
+           'tras la revision por un profesional medico autorizado de DERMATIKA.',
+           ML + 12, curY + 22, { width: CW - 20 }
          );
-      doc.y += 10;
+      curY += 64;
 
-      // ════════════════════════════════════════════════════════
-      // PIE DE PÁGINA EN TODAS LAS PÁGINAS
-      // ════════════════════════════════════════════════════════
-      const totalPages = doc.bufferedPageRange().count;
-      for (let i = 0; i < totalPages; i++) {
+      // ── Pie de pagina en todas las paginas ────────────────
+      const total = doc.bufferedPageRange().count;
+      for (let i = 0; i < total; i++) {
         doc.switchToPage(i);
-        doc.rect(0, doc.page.height - 28, doc.page.width, 28).fill(INK);
-        doc.fillColor('rgba(255,255,255,0.4)').fontSize(7).font('Helvetica')
+        doc.rect(0, PH - 26, PW, 26).fill('#0F1B2D');
+        doc.font('Helvetica').fontSize(7).fillColor('#667788')
            .text(
-             `DERMÁTIKA · dermatika.mx  |  Folio: ${folio}  |  Generado: ${fecha}  |  Página ${i+1} de ${totalPages}`,
-             50, doc.page.height - 18, { width: W, align: 'center' }
+             'DERMATIKA  |  dermatika.mx  |  Folio: ' + folio +
+             '  |  Pagina ' + (i + 1) + ' de ' + total,
+             ML, PH - 17, { width: CW, align: 'center' }
            );
       }
 
