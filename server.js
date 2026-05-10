@@ -79,19 +79,21 @@ const ALLOWED_ORIGINS = new Set(
   [
     'https://dermatika.mx',
     'https://www.dermatika.mx',
-    process.env.NETLIFY_ORIGIN || '',
+    'https://dermatika.netlify.app',
+    process.env.NETLIFY_ORIGIN        || '',
     process.env.NETLIFY_PREVIEW_ORIGIN || '',
-    process.env.FRONTEND_ORIGIN || ''   // ← variable que ya tienes en Render
+    process.env.FRONTEND_ORIGIN       || ''
   ].filter(Boolean)
 );
 
 app.use((req, res, next) => {
   const origin = req.headers.origin || '';
-  if (ALLOWED_ORIGINS.has(origin)) {
+  // Permitir siempre dermatika.mx aunque no esté en las vars de entorno
+  if (ALLOWED_ORIGINS.has(origin) || origin.endsWith('.dermatika.mx') || origin.endsWith('.netlify.app')) {
     res.header('Access-Control-Allow-Origin', origin);
   }
   res.header('Vary', 'Origin');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   return next();
@@ -1298,12 +1300,43 @@ app.post('/api/create-payment-intent', createPaymentIntentHandler);
 app.post('/api/confirm-payment-intent', async (req, res) => {
   try {
     if (!stripe) return res.status(503).json({ ok: false, error: 'stripe_not_configured' });
-    const paymentIntentId = sanitizeText(req.body?.paymentIntentId || '', 80);
-    const folio = getOrCreateFolio(req.body?.folio || '');
-    const planFromFE   = sanitizeText(req.body?.plan || '', 40);
-    const medFromFE    = sanitizeText(req.body?.medication || '', 40);
-    const priceFromFE  = Number(req.body?.price || 0);
+    const body = req.body || {};
+    const paymentIntentId = sanitizeText(body.payment_intent || body.payment_reference || body.paymentIntentId || '', 120);
+    const folio = getOrCreateFolio(body.folio || '');
+
+    // Parsear datos del paciente y cuestionario enviados desde el frontend
+    let patientData = {};
+    let answersData = {};
+    let shippingData = {};
+    let photosBase64 = [];
+
+    try {
+      if (body.patient && typeof body.patient === 'object') patientData = body.patient;
+      else if (body.patient) patientData = JSON.parse(body.patient);
+    } catch(e) { console.warn('[CONFIRM] Error parseando patient:', e.message); }
+
+    try {
+      if (body.questionnaire && typeof body.questionnaire === 'object') answersData = body.questionnaire;
+      else if (body.answers_json) answersData = typeof body.answers_json === 'string' ? JSON.parse(body.answers_json) : body.answers_json;
+    } catch(e) { console.warn('[CONFIRM] Error parseando answers:', e.message); }
+
+    try {
+      const rawShip = body.shipping || body.address;
+      if (rawShip && typeof rawShip === 'object') shippingData = rawShip;
+      else if (rawShip) shippingData = JSON.parse(rawShip);
+    } catch(e) { console.warn('[CONFIRM] Error parseando shipping:', e.message); }
+
+    try {
+      if (Array.isArray(body.photos_base64)) photosBase64 = body.photos_base64;
+    } catch(e) {}
+
+    const planFromFE  = sanitizeText(body.plan || answersData.selectedPlan || '', 40);
+    const medFromFE   = sanitizeText(body.medication || answersData.selectedMedication || '', 40);
+    const priceFromFE = Number(body.price || answersData.selectedPrice || 0);
+
     console.log('[CONFIRM] folio:', folio, '| pi:', paymentIntentId, '| plan:', planFromFE);
+    console.log('[CONFIRM] patient:', patientData.nombre||'(vacío)', patientData.apellido||'');
+    console.log('[CONFIRM] answers keys:', Object.keys(answersData).length, '| shipping:', !!shippingData.shipAddress1, '| fotos base64:', photosBase64.length);
     if (!paymentIntentId) return res.status(400).json({ ok: false, error: 'missing_payment_intent_id' });
 
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
@@ -1318,15 +1351,59 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
       db[idx].payment_status = paid ? 'succeeded' : String(pi?.status || 'unknown');
       db[idx].status = paid ? STATES.PAGADO : db[idx].status;
       db[idx].updatedAt = new Date().toISOString();
-      // Actualizar plan/medicamento/precio si vienen del frontend y faltan en el registro
-      if (planFromFE  && !db[idx].plan)       db[idx].plan       = planFromFE;
-      if (medFromFE   && !db[idx].medication)  db[idx].medication = medFromFE;
-      if (priceFromFE && !db[idx].price)       db[idx].price      = priceFromFE;
+      // Actualizar datos que llegaron en confirm (más completos que en el intake inicial)
+      if (planFromFE  ) db[idx].plan       = planFromFE;
+      if (medFromFE   ) db[idx].medication = medFromFE;
+      if (priceFromFE ) db[idx].price      = priceFromFE;
+      // Enriquecer con datos del paciente si el registro los tenía vacíos
+      if (patientData.nombre   && !db[idx].nombre  ) db[idx].nombre   = sanitizeText(patientData.nombre, 120);
+      if (patientData.apellido && !db[idx].apellido) db[idx].apellido = sanitizeText(patientData.apellido, 120);
+      if (patientData.correo   && !db[idx].correo  ) db[idx].correo   = sanitizeText(patientData.correo, 120);
+      if (patientData.whatsapp && !db[idx].whatsapp) db[idx].whatsapp = sanitizeText(patientData.whatsapp, 30);
+      if (patientData.sexo     && !db[idx].sexo    ) db[idx].sexo     = sanitizeText(patientData.sexo, 20);
+      // Enriquecer answers si el registro los tenía vacíos
+      if (Object.keys(answersData).length > 0 && (!db[idx].answers || Object.keys(db[idx].answers||{}).length === 0)) {
+        db[idx].answers = answersData;
+      }
+      // Enriquecer shipping
+      if (Object.keys(shippingData).length > 0 && !db[idx].shipping) {
+        db[idx].shipping = shippingData;
+      }
+      // Fotos base64 si llegaron en el confirm y no había en el registro
+      if (photosBase64.length > 0 && (!db[idx].files || db[idx].files.length === 0)) {
+        db[idx].files = photosBase64.map((p, i) => ({
+          field: `photo_${i+1}`,
+          name: p.name || `foto-${i+1}.jpg`,
+          type: p.type || 'image/jpeg',
+          data: p.data || (typeof p === 'string' ? p : null)
+        })).filter(f => f.data);
+        console.log('[CONFIRM] Fotos base64 guardadas desde confirm:', db[idx].files.length);
+      }
       updatedRow = db[idx];
       writeDb(db);
-      console.log('[CONFIRM] Registro actualizado — fotos guardadas:', (db[idx].files||[]).length, '| answers:', !!db[idx].answers);
+      console.log('[CONFIRM] Registro actualizado — nombre:', db[idx].nombre||'(vacío)',
+        '| answers keys:', Object.keys(db[idx].answers||{}).length,
+        '| fotos:', (db[idx].files||[]).length, '| shipping:', !!db[idx].shipping);
     } else {
-      console.warn('[CONFIRM] Registro NO encontrado en DB para folio:', folio, '| pi:', paymentIntentId);
+      // Si no hay registro previo (corner case), crear uno nuevo con los datos que llegaron
+      console.warn('[CONFIRM] Registro NO encontrado — creando nuevo con datos del confirm. folio:', folio);
+      const newRow = {
+        id: makeId('confirm'),
+        folio, nombre: sanitizeText(patientData.nombre||'', 120),
+        apellido: sanitizeText(patientData.apellido||'', 120),
+        correo: sanitizeText(patientData.correo||'', 120),
+        whatsapp: sanitizeText(patientData.whatsapp||'', 30),
+        sexo: sanitizeText(patientData.sexo||'', 20),
+        plan: planFromFE, medication: medFromFE, price: priceFromFE,
+        answers: answersData, shipping: shippingData,
+        files: photosBase64.map((p,i)=>({field:`photo_${i+1}`,name:p.name||`foto-${i+1}.jpg`,type:p.type||'image/jpeg',data:p.data||null})).filter(f=>f.data),
+        payment_reference: paymentIntentId, payment_status: paid?'succeeded':'unknown',
+        status: paid ? STATES.PAGADO : STATES.CHECKOUT_PENDIENTE,
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+      };
+      db.push(newRow);
+      writeDb(db);
+      updatedRow = newRow;
     }
 
     // ✅ CORREO MÉDICO COMPLETO CON PDF + FOTOS — solo si el pago fue exitoso
