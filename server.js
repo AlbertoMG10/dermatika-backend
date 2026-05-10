@@ -331,17 +331,41 @@ function generateEvaluationPDF(data) {
       const LINE   = '#E5EDF0';
       const W      = doc.page.width - 96; // ancho usable
 
-      // Helper: busca en el valor dado, fallback a N/A
+      // Helper: fallback a N/A
       const s = (v, fallback = 'N/A') =>
         (v !== null && v !== undefined && String(v).trim() !== '' && String(v).trim() !== 'undefined') 
           ? String(v).trim() : fallback;
       const money = v => v ? `$${Number(v).toLocaleString('es-MX')} MXN` : 'N/A';
-      // Helper: obtener valor de answers o directamente de data
+
+      // Helper: busca en answers, luego en data, soporta aliases
+      const ALIASES = {
+        acneSeverity: ['acneSeverity','acne'],
+        duration: ['duration','tiempo'],
+        acneAreas: ['acneAreas','zonas'],
+        sex: ['sex','sexo','gender'],
+        fullName: ['fullName','nombre'],
+        email: ['email','correo','leadEmail'],
+        phone: ['phone','whatsapp','leadWhatsapp'],
+        cityState: ['cityState','ciudad','state'],
+        shipAddress1: ['shipAddress1','shippingStreet','address'],
+        shipNeighborhood: ['shipNeighborhood','shippingNeighborhood','colonia'],
+        shipZip: ['shipZip','shippingPostalCode','zip'],
+        shipMunicipality: ['shipMunicipality','shippingMunicipality','municipality'],
+        shipCity: ['shipCity','city'],
+        shipState: ['shipState','shippingState','state'],
+      };
       const a = (key) => {
-        const fromAnswers = answers?.[key];
-        const fromData    = data?.[key];
-        const val = (fromAnswers !== null && fromAnswers !== undefined) ? fromAnswers : fromData;
-        return val;
+        const keys = [key, ...(ALIASES[key] || [])];
+        for (const k of keys) {
+          const v = answers?.[k] ?? data?.[k];
+          if (v !== null && v !== undefined && String(v).trim() !== '' && String(v).trim() !== 'undefined') return v;
+        }
+        // También buscar en shipping
+        const ship = data?.shipping || answers?.shipping || {};
+        for (const k of keys) {
+          if (ship[k] !== null && ship[k] !== undefined && String(ship[k]||'').trim()) return ship[k];
+        }
+        return undefined;
       };
 
       // ── ENCABEZADO ──────────────────────────────────────────────
@@ -416,9 +440,9 @@ function generateEvaluationPDF(data) {
 
       // ── 1. DATOS PERSONALES ──────────────────────────────────────
       seccion('1. Datos del Paciente');
-      fila('Nombre completo', `${s(data.nombre || data.fullName)} ${s(data.apellido,'')}`.trim());
-      fila('Correo electrónico', s(data.correo || data.email));
-      fila('WhatsApp', s(data.whatsapp));
+      fila('Nombre completo', `${s(data.nombre || data.fullName || a('fullName'))} ${s(data.apellido || a('apellido') || '','')}`.trim().trim());
+      fila('Correo electrónico', s(data.correo || data.email || a('email')));
+      fila('WhatsApp', s(data.whatsapp || a('phone')));
       fila('Fecha de nacimiento', s(data.fechaNacimiento || a('birthdate')));
       fila('Sexo biológico', s(data.sexo || a('sex')));
       fila('Edad (rango)', s(a('ageRange')));
@@ -428,12 +452,12 @@ function generateEvaluationPDF(data) {
       // ── 2. DIRECCIÓN ─────────────────────────────────────────────
       if (shipping && (shipping.address || shipping.colonia || shipping.zip)) {
         seccion('2. Dirección de Envío');
-        fila('Calle y número', s(shipping.address));
-        fila('Colonia', s(shipping.colonia));
-        fila('Código postal', s(shipping.zip));
-        fila('Municipio / Alcaldía', s(shipping.municipality));
-        fila('Ciudad', s(shipping.city));
-        fila('Estado', s(shipping.state));
+        fila('Calle y número', s(shipping?.shipAddress1 || shipping?.address || a('shipAddress1')));
+        fila('Colonia', s(shipping?.shipNeighborhood || shipping?.colonia || a('shipNeighborhood')));
+        fila('Código postal', s(shipping?.shipZip || shipping?.zip || a('shipZip')));
+        fila('Municipio / Alcaldía', s(shipping?.shipMunicipality || shipping?.municipality || a('shipMunicipality')));
+        fila('Ciudad', s(shipping?.shipCity || shipping?.city || a('shipCity')));
+        fila('Estado', s(shipping?.shipState || shipping?.state || a('shipState')));
         fila('Referencias', s(shipping.references));
       }
 
@@ -553,11 +577,28 @@ function buildEmailHTML(data) {
     else if (data.answers && typeof data.answers === 'object') answers = data.answers;
   } catch(e) {}
 
-  // Buscar campo en answers primero, luego directamente en data (window.formData tiene ambos)
+  // Buscar campo con aliases — soporta tanto keys del cuestionario como aliases del formData
+  const ALIASES_E = {
+    acneSeverity: ['acneSeverity','acne'],
+    duration: ['duration','tiempo'],
+    acneAreas: ['acneAreas','zonas'],
+    sex: ['sex','sexo','gender'],
+    email: ['email','correo','leadEmail'],
+    phone: ['phone','whatsapp','leadWhatsapp'],
+    shipAddress1: ['shipAddress1','shippingStreet'],
+    shipNeighborhood: ['shipNeighborhood','shippingNeighborhood'],
+    shipZip: ['shipZip','shippingPostalCode'],
+    shipMunicipality: ['shipMunicipality','shippingMunicipality'],
+    shipState: ['shipState','shippingState'],
+  };
   const a = (key) => {
-    const fromAnswers = answers?.[key];
-    const fromData    = data?.[key];
-    return (fromAnswers !== null && fromAnswers !== undefined) ? fromAnswers : fromData;
+    const keys = [key, ...(ALIASES_E[key] || [])];
+    const ship = data?.shipping || answers?.shipping || {};
+    for (const k of keys) {
+      const v = answers?.[k] ?? data?.[k] ?? ship?.[k];
+      if (v !== null && v !== undefined && String(v||'').trim() !== '' && String(v||'').trim() !== 'undefined') return v;
+    }
+    return undefined;
   };
   const arr = (key) => {
     const v = a(key);
@@ -1064,51 +1105,79 @@ app.post('/api/intake', upload.any(), async (req, res) => {
     // No bloquear — permitir continuar sin fotos (el médico lo revisará)
   }
 
+  // ── Parsear answers_json que contiene TODO el window.formData del frontend ──
+  let parsedAnswers = {};
+  try {
+    const raw = body.answers_json || body.answers;
+    if (raw) {
+      parsedAnswers = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      console.log('[INTAKE] answers_json parseado — keys:', Object.keys(parsedAnswers).slice(0,10).join(','));
+    } else {
+      console.warn('[INTAKE] answers_json VACÍO — body keys:', Object.keys(body).join(','));
+    }
+  } catch(e) {
+    console.error('[INTAKE] Error parseando answers_json:', e.message);
+  }
+
+  // Extraer datos del paciente desde answers (window.formData) o directamente del body
+  // El frontend pone los datos en window.formData y los serializa en answers_json
+  const pa = parsedAnswers; // alias corto
+  const nombre    = sanitizeText(pa.nombre || pa.identityName || body.nombre || body.patient_name || body.identityName || '', 120);
+  const apellido  = sanitizeText(pa.apellido || pa.identityLastName || body.apellido || body.identityLastName || '', 120);
+  const correo    = sanitizeText(pa.correo || pa.email || pa.leadEmail || body.correo || body.email || body.leadEmail || '', 120);
+  const whatsapp  = normalizePhone(pa.whatsapp || pa.phone || pa.leadWhatsapp || body.whatsapp || body.phone || body.leadWhatsapp || '');
+  const fechaNac  = sanitizeText(pa.fechaNacimiento || pa.birthdate || body.fechaNacimiento || body.birthdate || '', 80);
+  const sexo      = sanitizeText(pa.sexo || pa.sex || pa.gender || body.sexo || body.sex || body.gender || '', 20);
+
+  console.log('[INTAKE] Paciente — nombre:', nombre || '(vacío)', '| correo:', correo || '(vacío)', '| sexo:', sexo || '(vacío)');
+  console.log('[INTAKE] Acné — severidad:', pa.acneSeverity || pa.acne || '(vacío)', '| duración:', pa.duration || pa.tiempo || '(vacío)');
+
+  // Reconstruir shipping desde answers o body
+  const shippingData = (() => {
+    if (pa.shipping && typeof pa.shipping === 'object') return pa.shipping;
+    if (body.shipping && typeof body.shipping === 'object') return body.shipping;
+    const s = {};
+    const shipMap = {
+      shipFullName: [pa.shipFullName, body.shipFullName],
+      shipEmail: [pa.shipEmail, body.shipEmail],
+      shipWhatsapp: [pa.shipWhatsapp, body.shipWhatsapp],
+      shipAddress1: [pa.shipAddress1, pa.shippingStreet, body.shipAddress1, body.shippingStreet],
+      shipExterior: [pa.shipExterior, body.shipExterior],
+      shipAddress2: [pa.shipAddress2, body.shipAddress2],
+      shipZip: [pa.shipZip, pa.shippingPostalCode, body.shipZip, body.shippingPostalCode],
+      shipNeighborhood: [pa.shipNeighborhood, pa.shippingNeighborhood, body.shipNeighborhood, body.shippingNeighborhood],
+      shipNeighborhoodManual: [pa.shipNeighborhoodManual, body.shipNeighborhoodManual],
+      shipMunicipality: [pa.shipMunicipality, pa.shippingMunicipality, body.shipMunicipality, body.shippingMunicipality],
+      shipCity: [pa.shipCity, body.shipCity],
+      shipState: [pa.shipState, pa.shippingState, body.shipState, body.shippingState],
+      references: [pa.references, body.references]
+    };
+    Object.entries(shipMap).forEach(([k, vals]) => {
+      const v = vals.find(x => x && String(x).trim());
+      if (v) s[k] = sanitizeText(String(v), 200);
+    });
+    return Object.keys(s).length > 0 ? s : null;
+  })();
+
   const payload = {
     id: makeId('intake'),
-    nombre: normalizeText(body.nombre || body.patient_name),
-    apellido: normalizeText(body.apellido),
-    fullName: normalizeText(body.fullName || body.patient_name),
-    correo: normalizeText(body.correo || body.email),
-    whatsapp: normalizePhone(body.whatsapp || body.phone),
-    fechaNacimiento: normalizeText(body.fechaNacimiento || body.birthdate),
-    sexo: normalizeText(body.sexo || body.sex || body.gender),
+    nombre,
+    apellido,
+    fullName: `${nombre} ${apellido}`.trim() || sanitizeText(body.fullName || pa.fullName || '', 200),
+    correo,
+    whatsapp,
+    fechaNacimiento: fechaNac,
+    sexo,
     status,
     plan,
     medication,
     price,
     folio,
-    shipping: (() => {
-      if (body.shipping && typeof body.shipping === 'object') return body.shipping;
-      // Reconstruir shipping desde campos del FormData
-      const s = {};
-      const shipFields = ['shipFullName','shipEmail','shipWhatsapp','shipAddress1','shipExterior',
-                          'shipAddress2','shipZip','shipNeighborhood','shipNeighborhoodManual',
-                          'shipMunicipality','shipCity','shipState'];
-      shipFields.forEach(k => { if (body[k]) s[k] = sanitizeText(body[k], 200); });
-      if (body.shippingStreet) s.shipAddress1 = sanitizeText(body.shippingStreet, 200);
-      if (body.shippingNeighborhood) s.shipNeighborhood = sanitizeText(body.shippingNeighborhood, 100);
-      if (body.shippingMunicipality) s.shipMunicipality = sanitizeText(body.shippingMunicipality, 100);
-      if (body.shippingState) s.shipState = sanitizeText(body.shippingState, 100);
-      if (body.shippingPostalCode) s.shipZip = sanitizeText(body.shippingPostalCode, 10);
-      return Object.keys(s).length > 0 ? s : null;
-    })(),
-    payment_reference: sanitizeText(body.payment_reference || body.payment_intent_id || '', 120) || null,
+    shipping: shippingData,
+    payment_reference: sanitizeText(body.payment_reference || body.payment_intent_id || pa.payment_reference || '', 120) || null,
     payment_status: sanitizeText(body.payment_status || 'pending', 80),
-    answers: (() => {
-      try {
-        // answers_json es el JSON.stringify(window.formData) del frontend
-        const raw = body.answers_json || body.answers;
-        if (!raw) return null;
-        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        // window.formData tiene los campos directamente (acneSeverity, sex, etc.)
-        // Normalizar para que el PDF/email funcione
-        return parsed;
-      } catch(e) {
-        console.error('[INTAKE] Error parseando answers_json:', e.message);
-        return null;
-      }
-    })(),
+    // Guardar answers completo — el PDF/email usa a() que busca aquí
+    answers: parsedAnswers,
     files: fileSummaries,
     createdAt: nowIso,
     updatedAt: nowIso
