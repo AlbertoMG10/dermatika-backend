@@ -256,87 +256,184 @@ const ADMIN_EMAIL    = process.env.ADMIN_EMAIL || '';
 const MAIL_FROM = 'DERMATIKA <no-reply@dermatika.mx>';
 
 // ══════════════════════════════════════════════════════════════════
-// AIRTABLE — Guardar lead después del pago confirmado
-// Variables: AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_TABLE
+// AIRTABLE — Dos tablas: CRM ADMIN (ventas) + CRM MEDICO (doctor)
+// Variables requeridas en Render:
+//   AIRTABLE_API_KEY  — Personal Access Token de Airtable
+//   AIRTABLE_BASE_ID  — ID de la base (appXXXXXXXXXX)
+//   AIRTABLE_TABLE_ADMIN  — nombre exacto tabla admin (default: 'CRM ADMIN')
+//   AIRTABLE_TABLE_MEDICO — nombre exacto tabla médico (default: 'CRM MEDICO')
 // ══════════════════════════════════════════════════════════════════
-const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY || '';
-const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || '';
-const AIRTABLE_TABLE   = process.env.AIRTABLE_TABLE   || 'CRM ADMIN';
+const AIRTABLE_API_KEY      = process.env.AIRTABLE_API_KEY      || '';
+const AIRTABLE_BASE_ID      = process.env.AIRTABLE_BASE_ID      || '';
+const AIRTABLE_TABLE_ADMIN  = process.env.AIRTABLE_TABLE_ADMIN  || process.env.AIRTABLE_TABLE || 'CRM ADMIN';
+const AIRTABLE_TABLE_MEDICO = process.env.AIRTABLE_TABLE_MEDICO || 'CRM MEDICO';
 
-async function saveToAirtable(row, paymentIntentId) {
+// Helper interno para llamadas a la API de Airtable
+async function _airtableRequest(method, tableName, recordId, body) {
+  const base = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(tableName)}`;
+  const url  = recordId ? `${base}/${recordId}` : base;
+  const res  = await fetch(url, {
+    method,
+    headers: {
+      'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const data = await res.json();
+  return { ok: res.ok, status: res.status, data };
+}
+
+// Buscar recordId en una tabla por valor de campo Folio
+async function _findAirtableRecord(tableName, folio) {
+  try {
+    const filterFormula = encodeURIComponent(`{Folio}="${folio}"`);
+    const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(tableName)}?filterByFormula=${filterFormula}&maxRecords=1`;
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` }
+    });
+    const data = await res.json();
+    if (res.ok && data.records && data.records.length > 0) {
+      return data.records[0].id;
+    }
+    return null;
+  } catch(e) {
+    console.error('[AIRTABLE] Error buscando record:', e.message);
+    return null;
+  }
+}
+
+// Convertir fotos base64 a formato attachment de Airtable
+// Airtable necesita una URL pública — usamos un proxy base64 via upload a imgbb o simplemente
+// incluimos las fotos como URL de data (Airtable NO acepta data URLs, necesita URLs públicas)
+// Por ahora guardamos el count y nombres — cuando haya CDN se actualizan las URLs
+function _buildPhotoAttachments(files) {
+  if (!Array.isArray(files) || files.length === 0) return [];
+  // Airtable Attachments requieren { url: 'https://...' }
+  // Si las fotos están en base64, necesitamos subirlas primero a un CDN
+  // Por ahora retornamos array vacío — se completa cuando se implemente CDN
+  // Las fotos sí van adjuntas en el correo PDF
+  return [];
+}
+
+// ── GUARDAR EN CRM ADMIN (ventas/admin) ──────────────────────────
+async function saveToAirtableAdmin(row, paymentIntentId) {
   if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) {
-    console.warn('[AIRTABLE] Variables no configuradas — AIRTABLE_API_KEY o AIRTABLE_BASE_ID faltante');
+    console.warn('[AIRTABLE] Variables no configuradas — omitiendo');
     return false;
   }
 
-  const pa  = row.answers   || {};
-  const pt  = row.shipping  || {};
-  const s   = (v, fb = '') => (v !== null && v !== undefined && String(v).trim() !== '') ? String(v).trim() : fb;
-  const arr = (v) => Array.isArray(v) ? v.join(', ') : s(v);
-
-  // Campos exactos de Airtable — ajusta los nombres si difieren en tu tabla
-  const fields = {
-    'Folio':              s(row.folio),
-    'Nombre':             `${s(row.nombre)} ${s(row.apellido)}`.trim(),
-    'Correo':             s(row.correo),
-    'WhatsApp':           s(row.whatsapp),
-    'Sexo':               s(row.sexo || pa.sex || pa.sexo),
-    'Fecha Nacimiento':   s(row.fechaNacimiento || pa.birthdate),
-    'Edad':               s(pa.ageRange),
-    'Plan':               s(row.plan),
-    'Medicamento':        s(row.medication),
-    'Precio':             Number(row.price || 0),
-    'Estado Pago':        'PAGADO',
-    'Referencia Stripe':  s(paymentIntentId),
-    'Estado Paciente':    s(row.status),
-    'Severidad Acné':     s(pa.acneSeverity || pa.acne),
-    'Duración Acné':      s(pa.duration || pa.tiempo),
-    'Zonas Afectadas':    arr(pa.acneAreas || pa.zonas),
-    'Tratamientos Previos': arr(pa.previousTreatments),
-    'Isotretinoína Previa': s(pa.isotretinoinBefore),
-    'Medicamentos Actuales': s(pa.currentMedications),
-    'Alergias':           s(pa.allergies),
-    'Salud General':      s(pa.generalHealth),
-    'Dirección':          s(pt.shipAddress1),
-    'Colonia':            s(pt.shipNeighborhood),
-    'CP':                 s(pt.shipZip),
-    'Municipio':          s(pt.shipMunicipality),
-    'Estado Dirección':   s(pt.shipState),
-    'Ciudad':             s(pt.shipCity),
-    'Fecha Registro':     new Date().toISOString(),
-    'Notas':              `Evaluación completada y pagada. Folio: ${s(row.folio)}`
+  const pa = row.answers  || {};
+  const sv = (v, fb = '') => {
+    if (v === null || v === undefined) return fb;
+    const str = String(v).trim();
+    return (str === '' || str === 'undefined' || str === 'null') ? fb : str;
   };
 
-  // Eliminar campos vacíos para no generar errores en Airtable
-  Object.keys(fields).forEach(k => {
-    if (fields[k] === '' || fields[k] === null || fields[k] === undefined) delete fields[k];
-  });
+  // Campos exactos de la tabla CRM ADMIN
+  const fields = {
+    'Folio':    sv(row.folio),
+    'Fecha':    new Date().toISOString().split('T')[0],
+    'Nombre':   (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.nombre),
+    'Telefono': sv(row.whatsapp || pa.whatsapp || pa.phone),
+    'Email':    sv(row.correo   || pa.correo   || pa.email),
+    'Edad':     sv(pa.ageRange  || pa.edad     || pa.age),
+    'Sexo':     sv(row.sexo     || pa.sexo     || pa.sex),
+  };
 
-  console.log('[AIRTABLE] Intentando guardar — folio:', s(row.folio), '| tabla:', AIRTABLE_TABLE, '| campos:', Object.keys(fields).length);
+  // Eliminar campos vacíos
+  Object.keys(fields).forEach(k => { if (!fields[k]) delete fields[k]; });
+
+  console.log('[AIRTABLE] Guardando en CRM ADMIN — folio:', sv(row.folio),
+    '| campos:', Object.keys(fields).join(', '));
 
   try {
-    const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE)}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type':  'application/json'
-      },
-      body: JSON.stringify({ fields })
-    });
-    const data = await res.json();
-    if (res.ok && data.id) {
-      console.log('[AIRTABLE] ✅ Guardado OK — record id:', data.id, '| folio:', s(row.folio));
-      return data.id;
+    // Verificar si ya existe el registro
+    const existingId = await _findAirtableRecord(AIRTABLE_TABLE_ADMIN, sv(row.folio));
+    let result;
+    if (existingId) {
+      result = await _airtableRequest('PATCH', AIRTABLE_TABLE_ADMIN, existingId, { fields });
+      console.log('[AIRTABLE] CRM ADMIN actualizado — record id:', existingId);
     } else {
-      console.error('[AIRTABLE ERROR] Status:', res.status, '| Error:', JSON.stringify(data?.error || data));
+      result = await _airtableRequest('POST', AIRTABLE_TABLE_ADMIN, null, { fields });
+      if (result.ok) console.log('[AIRTABLE] Registro creado correctamente — record id:', result.data.id, '| folio:', sv(row.folio));
+    }
+    if (!result.ok) {
+      const errMsg = result.data?.error?.message || result.data?.error?.type || JSON.stringify(result.data?.error || result.data);
+      console.error('[AIRTABLE ERROR]', result.status, errMsg);
+      console.error('[AIRTABLE ERROR] Campos enviados:', JSON.stringify(fields));
       return false;
     }
+    return result.data.id || existingId;
   } catch (err) {
-    console.error('[AIRTABLE ERROR] Excepción al guardar:', err.message || err);
+    console.error('[AIRTABLE ERROR] Excepcion en CRM ADMIN:', err.message || String(err));
     return false;
   }
 }
+
+// ── GUARDAR EN CRM MEDICO (doctor) ───────────────────────────────
+async function saveToAirtableMedico(row) {
+  if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) return false;
+
+  const pa = row.answers  || {};
+  const sv = (v, fb = '') => {
+    if (v === null || v === undefined) return fb;
+    const str = String(v).trim();
+    return (str === '' || str === 'undefined' || str === 'null') ? fb : str;
+  };
+  const av = v => Array.isArray(v) ? v.join(', ') : sv(v);
+
+  // Campos de CRM MEDICO — SIN teléfono ni email (privacidad)
+  const fields = {
+    'Folio':            sv(row.folio),
+    'Nombre':           (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.nombre),
+    'Edad':             sv(pa.ageRange || pa.edad || pa.age),
+    'Sexo':             sv(row.sexo || pa.sexo || pa.sex),
+    'Acne severidad':   sv(pa.acneSeverity || pa.acne),
+    // Campos médicos — inicialmente vacíos, el doctor los llena
+    'Receta medica':           '',
+    'Dosis indicada':          '',
+    'Indicaciones skincare':   '',
+    'Estado medico':           'Pendiente revision',
+    'Comentarios del medico':  '',
+    // Fotos — Airtable attachment (requiere URLs públicas)
+    // 'Fotos': _buildPhotoAttachments(row.files),
+  };
+
+  // Eliminar campos vacíos excepto los médicos que deben existir aunque vacíos
+  const medicalFields = ['Receta medica','Dosis indicada','Indicaciones skincare','Estado medico','Comentarios del medico'];
+  Object.keys(fields).forEach(k => {
+    if (!medicalFields.includes(k) && !fields[k]) delete fields[k];
+    if (medicalFields.includes(k) && fields[k] === '') delete fields[k]; // dejar que Airtable inicie vacíos
+  });
+
+  console.log('[AIRTABLE] Guardando en CRM MEDICO — folio:', sv(row.folio),
+    '| campos:', Object.keys(fields).join(', '));
+
+  try {
+    const existingId = await _findAirtableRecord(AIRTABLE_TABLE_MEDICO, sv(row.folio));
+    let result;
+    if (existingId) {
+      result = await _airtableRequest('PATCH', AIRTABLE_TABLE_MEDICO, existingId, { fields });
+      console.log('[AIRTABLE] CRM MEDICO actualizado — record id:', existingId);
+    } else {
+      result = await _airtableRequest('POST', AIRTABLE_TABLE_MEDICO, null, { fields });
+      if (result.ok) console.log('[AIRTABLE] Registro creado correctamente en CRM MEDICO — record id:', result.data.id);
+    }
+    if (!result.ok) {
+      const errMsg = result.data?.error?.message || result.data?.error?.type || JSON.stringify(result.data?.error || result.data);
+      console.error('[AIRTABLE ERROR]', result.status, errMsg);
+      return false;
+    }
+    return result.data.id || existingId;
+  } catch (err) {
+    console.error('[AIRTABLE ERROR] Excepcion en CRM MEDICO:', err.message || String(err));
+    return false;
+  }
+}
+
+// Alias para compatibilidad con el código existente
+const saveToAirtable = (row, piId) => saveToAirtableAdmin(row, piId);
 
 // ── Log de arranque: verificar variables críticas ──
 console.log('[CONFIG] STRIPE_SECRET_KEY:', stripeSecret ? '✅ configurada' : '❌ FALTA');
@@ -346,7 +443,8 @@ console.log('[CONFIG] ADMIN_EMAIL:', ADMIN_EMAIL || '❌ FALTA');
 console.log('[CONFIG] FRONTEND_ORIGIN:', process.env.FRONTEND_ORIGIN || '❌ FALTA');
 console.log('[CONFIG] AIRTABLE_API_KEY:', AIRTABLE_API_KEY ? '✅ configurada' : '❌ FALTA');
 console.log('[CONFIG] AIRTABLE_BASE_ID:', AIRTABLE_BASE_ID || '❌ FALTA');
-console.log('[CONFIG] AIRTABLE_TABLE:', AIRTABLE_TABLE);
+console.log('[CONFIG] AIRTABLE_TABLE_ADMIN:', AIRTABLE_TABLE_ADMIN);
+console.log('[CONFIG] AIRTABLE_TABLE_MEDICO:', AIRTABLE_TABLE_MEDICO);
 
 async function sendInternalMail(subject, text, attachments = [], htmlContent = null) {
   if (!RESEND_API_KEY || !ADMIN_EMAIL) {
@@ -1584,11 +1682,16 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
       } catch (mailErr) {
         console.error('[CONFIRM] ❌ Error enviando correo:', mailErr.message || mailErr);
       }
-      // Guardar en Airtable después del correo
+      // Guardar en Airtable — CRM ADMIN (ventas) y CRM MEDICO (doctor)
       try {
-        await saveToAirtable(updatedRow, paymentIntentId);
+        await saveToAirtableAdmin(updatedRow, paymentIntentId);
       } catch(atErr) {
-        console.error('[AIRTABLE ERROR] Error al llamar saveToAirtable:', atErr.message);
+        console.error('[AIRTABLE ERROR] Error en CRM ADMIN:', atErr.message);
+      }
+      try {
+        await saveToAirtableMedico(updatedRow);
+      } catch(atErr) {
+        console.error('[AIRTABLE ERROR] Error en CRM MEDICO:', atErr.message);
       }
     } else if (!paid) {
       console.log('[CONFIRM] Pago NO exitoso — status:', pi?.status, '— NO se envía correo');
@@ -1596,7 +1699,8 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
       console.log('[CONFIRM] Correo ya enviado previamente para folio:', folio);
       // Intentar Airtable igual (puede que no se haya guardado la primera vez)
       if (updatedRow) {
-        try { await saveToAirtable(updatedRow, paymentIntentId); } catch(e) {}
+        try { await saveToAirtableAdmin(updatedRow, paymentIntentId); } catch(e) {}
+        try { await saveToAirtableMedico(updatedRow); } catch(e) {}
       }
     }
 
@@ -1678,6 +1782,140 @@ app.post('/api/stripe-webhook',
     return res.json({ received: true });
   }
 );
+
+// ══════════════════════════════════════════════════════════════════
+// /api/medical-update — El médico actualiza receta, dosis e indicaciones
+// Campos actualizados en CRM MEDICO de Airtable
+// ══════════════════════════════════════════════════════════════════
+app.post('/api/medical-update', async (req, res) => {
+  try {
+    const body   = req.body || {};
+    const folio  = sanitizeText(body.folio || '', 40);
+    const apiKey = sanitizeText(body.api_key || '', 100); // clave médico para autenticar
+
+    if (!folio) return res.status(400).json({ ok: false, error: 'folio_requerido' });
+
+    // Validar clave del médico
+    const MEDICAL_API_KEY = process.env.MEDICAL_API_KEY || '';
+    if (MEDICAL_API_KEY && apiKey !== MEDICAL_API_KEY) {
+      return res.status(401).json({ ok: false, error: 'no_autorizado' });
+    }
+
+    if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) {
+      return res.status(503).json({ ok: false, error: 'airtable_no_configurado' });
+    }
+
+    // Buscar el record en CRM MEDICO
+    const recordId = await _findAirtableRecord(AIRTABLE_TABLE_MEDICO, folio);
+    if (!recordId) {
+      return res.status(404).json({ ok: false, error: 'paciente_no_encontrado', folio });
+    }
+
+    // Campos que el médico puede actualizar
+    const fields = {};
+    if (body.receta_medica        ) fields['Receta medica']          = sanitizeText(body.receta_medica, 2000);
+    if (body.dosis_indicada       ) fields['Dosis indicada']         = sanitizeText(body.dosis_indicada, 1000);
+    if (body.indicaciones_skincare) fields['Indicaciones skincare']  = sanitizeText(body.indicaciones_skincare, 2000);
+    if (body.estado_medico        ) fields['Estado medico']          = sanitizeText(body.estado_medico, 100);
+    if (body.comentarios_medico   ) fields['Comentarios del medico'] = sanitizeText(body.comentarios_medico, 2000);
+
+    if (Object.keys(fields).length === 0) {
+      return res.status(400).json({ ok: false, error: 'sin_campos_para_actualizar' });
+    }
+
+    console.log('[MEDICO] Actualizando expediente — folio:', folio, '| campos:', Object.keys(fields).join(', '));
+
+    const result = await _airtableRequest('PATCH', AIRTABLE_TABLE_MEDICO, recordId, { fields });
+
+    if (!result.ok) {
+      const errMsg = result.data?.error?.message || JSON.stringify(result.data?.error || result.data);
+      console.error('[MEDICO ERROR]', result.status, errMsg);
+      return res.status(500).json({ ok: false, error: 'error_airtable', detail: errMsg });
+    }
+
+    console.log('[MEDICO] Expediente actualizado correctamente — folio:', folio, '| record:', recordId);
+
+    // También guardar en DB local
+    const db  = readDb();
+    const idx = db.findIndex(r => String(r.folio||'').toLowerCase() === folio.toLowerCase());
+    if (idx >= 0) {
+      if (!db[idx].medico) db[idx].medico = {};
+      if (body.receta_medica        ) db[idx].medico.receta_medica         = sanitizeText(body.receta_medica, 2000);
+      if (body.dosis_indicada       ) db[idx].medico.dosis_indicada        = sanitizeText(body.dosis_indicada, 1000);
+      if (body.indicaciones_skincare) db[idx].medico.indicaciones_skincare = sanitizeText(body.indicaciones_skincare, 2000);
+      if (body.estado_medico        ) db[idx].medico.estado_medico         = sanitizeText(body.estado_medico, 100);
+      if (body.comentarios_medico   ) db[idx].medico.comentarios_medico    = sanitizeText(body.comentarios_medico, 2000);
+      db[idx].medico.updatedAt = new Date().toISOString();
+      writeDb(db);
+    }
+
+    return res.json({ ok: true, folio, record_id: recordId, updated: Object.keys(fields) });
+  } catch (err) {
+    console.error('[MEDICO ERROR] Excepcion:', err.message || err);
+    return res.status(500).json({ ok: false, error: 'server_error' });
+  }
+});
+
+// /api/medical-get — El médico consulta el expediente de un paciente
+app.get('/api/medical-get', async (req, res) => {
+  try {
+    const folio  = sanitizeText(req.query.folio  || '', 40);
+    const apiKey = sanitizeText(req.query.api_key || '', 100);
+    if (!folio) return res.status(400).json({ ok: false, error: 'folio_requerido' });
+
+    const MEDICAL_API_KEY = process.env.MEDICAL_API_KEY || '';
+    if (MEDICAL_API_KEY && apiKey !== MEDICAL_API_KEY) {
+      return res.status(401).json({ ok: false, error: 'no_autorizado' });
+    }
+
+    // Leer de DB local
+    const db  = readDb();
+    const row = db.find(r => String(r.folio||'').toLowerCase() === folio.toLowerCase());
+    if (!row) return res.status(404).json({ ok: false, error: 'paciente_no_encontrado' });
+
+    const pa = row.answers || {};
+    const av = v => Array.isArray(v) ? v.join(', ') : (v || 'N/A');
+
+    // Solo datos médicos — SIN teléfono ni email
+    return res.json({
+      ok: true,
+      expediente: {
+        folio:          row.folio,
+        nombre:         `${row.nombre||''} ${row.apellido||''}`.trim(),
+        edad:           av(pa.ageRange || pa.edad),
+        sexo:           row.sexo || pa.sex || pa.sexo || 'N/A',
+        acne_severidad: pa.acneSeverity || pa.acne || 'N/A',
+        acne_duracion:  pa.duration || pa.tiempo || 'N/A',
+        acne_zonas:     av(pa.acneAreas || pa.zonas),
+        acne_tipo:      av(pa.acneType),
+        tratamientos_previos: av(pa.previousTreatments),
+        isotretinoin_previa:  pa.isotretinoinBefore || 'N/A',
+        salud_general:        pa.generalHealth || 'N/A',
+        condiciones_cronicas: av(pa.chronicConditions),
+        medicamentos_actuales: pa.currentMedications || 'N/A',
+        alergias:             pa.allergies || 'N/A',
+        salud_mental:         av(pa.mentalHealth),
+        ideas_suicidas:       pa.suicidalIdeation || 'N/A',
+        plan:           row.plan || 'N/A',
+        medicamento:    row.medication || 'N/A',
+        estado_pago:    row.payment_status || 'N/A',
+        fecha:          row.createdAt || 'N/A',
+        fotos_count:    (row.files || []).length,
+        // Datos del médico
+        medico: row.medico || {
+          receta_medica: '',
+          dosis_indicada: '',
+          indicaciones_skincare: '',
+          estado_medico: 'Pendiente revision',
+          comentarios_medico: ''
+        }
+      }
+    });
+  } catch (err) {
+    console.error('[MEDICO GET ERROR]', err.message);
+    return res.status(500).json({ ok: false, error: 'server_error' });
+  }
+});
 
 // ✅ Config pública (solo public key — nunca secret key)
 app.get('/api/config', (_req, res) => {
