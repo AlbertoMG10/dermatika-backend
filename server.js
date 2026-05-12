@@ -116,9 +116,9 @@ const STATES = {
 };
 
 const PLAN_PRICE_MAP = {
-  esencial: { amount: 159000, medication: 'Neotrex', plan: 'Esencial' },
-  avanzado: { amount: 189000, medication: 'Vastionin', plan: 'Avanzado' },
-  elite: { amount: 269000, medication: 'Epuris', plan: 'Elite' }
+  esencial: { amount: 159000, price: 1590, medication: 'Neotrex', plan: 'Esencial', planLabel: 'Nova Esencial' },
+  avanzado: { amount: 189000, price: 1890, medication: 'Vastionin', plan: 'Avanzado', planLabel: 'Nova Avanzado' },
+  elite: { amount: 269000, price: 2690, medication: 'Epuris', plan: 'Elite', planLabel: 'Nova Elite' }
 };
 
 const DAYS_30_MS = 30 * 24 * 60 * 60 * 1000;
@@ -152,6 +152,13 @@ function normalizeText(v = '') {
 
 function normalizePhone(v = '') {
   return String(v || '').replace(/\D/g, '').slice(0, 20);
+}
+
+function normalizeWeightKg(v = '') {
+  const raw = String(v || '').replace(',', '.').replace(/[^\d.]/g, '');
+  const weight = Number(raw);
+  if (!Number.isFinite(weight) || weight < 30 || weight > 180) return '';
+  return String(Math.round(weight * 10) / 10);
 }
 
 function makeId(prefix = 'row') {
@@ -244,6 +251,39 @@ function normalizePlanKey(planRaw = '') {
   if (p.includes('avanzado')) return 'avanzado';
   if (p.includes('elite')) return 'elite';
   return '';
+}
+
+function normalizePlanKeyFromPrice(priceRaw = 0) {
+  const price = Number(priceRaw || 0);
+  if (price === 1590 || price === 159000) return 'esencial';
+  if (price === 1890 || price === 189000) return 'avanzado';
+  if (price === 2690 || price === 269000) return 'elite';
+  return '';
+}
+
+function resolvePlanSelection(...sources) {
+  const merged = Object.assign({}, ...sources.filter(Boolean));
+  const rawPlan = merged.planKey || merged.plan_key || merged.plan || merged.planLabel || merged.plan_label ||
+    merged.planName || merged.plan_name || merged.selectedPlan || merged.selectedPlanLabel || '';
+  const key = normalizePlanKey(rawPlan) || normalizePlanKeyFromPrice(merged.price || merged.plan_price || merged.selectedPrice || 0);
+  const canonical = PLAN_PRICE_MAP[key] || null;
+  if (!canonical) {
+    return {
+      planKey: '',
+      plan: sanitizeText(merged.planLabel || merged.plan_name || merged.plan || merged.selectedPlan || '', 80),
+      planLabel: sanitizeText(merged.planLabel || merged.plan_label || merged.plan_name || merged.plan || merged.selectedPlan || '', 80),
+      medication: sanitizeText(merged.medication || merged.selectedMedication || '', 60) || null,
+      price: Number(merged.price || merged.plan_price || merged.selectedPrice || 0) || null
+    };
+  }
+  return {
+    planKey: key,
+    plan: canonical.planLabel,
+    planLabel: canonical.planLabel,
+    medication: canonical.medication,
+    price: canonical.price,
+    amount: canonical.amount
+  };
 }
 
 // ✅ Stripe: solo si están configuradas las keys
@@ -359,6 +399,7 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
 
   const edadReal = calcularEdad(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate);
   const precioNum = Number(row.price || pa.selectedPrice || 0) || 0;
+  const pesoKg = normalizeWeightKg(row.weight || row.peso || pa.weight || pa.peso || pa.pesoKg);
 
   const fields = {
     // ── Identificación ─────────────────────────────────────────
@@ -368,6 +409,7 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
     'Telefono':   sv(row.whatsapp || pa.whatsapp || pa.phone),
     'Email':      sv(row.correo   || pa.correo   || pa.email),
     'Edad':       edadReal ? Number(edadReal) : undefined,
+    'Peso':       pesoKg ? Number(pesoKg) : undefined,
     'Sexo':       sv(row.sexo || pa.sexo || pa.sex),
     'Tipo piel':  sv(pa.skinType || pa.tipoPiel),
     'Ciudad':     sv(pa.cityState || pt.shipCity),
@@ -471,6 +513,7 @@ async function saveToAirtableMedico(row) {
   };
 
   const edadReal = calcularEdad(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate);
+  const pesoKg = normalizeWeightKg(row.weight || row.peso || pa.weight || pa.peso || pa.pesoKg);
 
   // SOLO estos campos — el cuestionario completo queda en el PDF
   const fields = {
@@ -478,6 +521,7 @@ async function saveToAirtableMedico(row) {
     'Fecha':          new Date().toISOString().split('T')[0],
     'Nombre':         (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.nombre),
     'Edad':           edadReal || sv(pa.ageRange || pa.edad),
+    'Peso':           pesoKg ? Number(pesoKg) : undefined,
     'Sexo':           sv(row.sexo || pa.sexo || pa.sex),
     'Tipo piel':      sv(pa.skinType || pa.tipoPiel),
     'Plan':           sv(row.plan),
@@ -784,6 +828,7 @@ function generateEvaluationPDF(data) {
       campo('Sexo biologico',     sv(data.sexo || a('sex')));
       campo('Fecha de nacimiento',sv(data.fechaNacimiento || a('birthdate')));
       campo('Edad',               sv(a('ageRange')));
+      campo('Peso',               normalizeWeightKg(data.weight || data.peso || a('weight') || a('peso') || a('pesoKg')) ? `${normalizeWeightKg(data.weight || data.peso || a('weight') || a('peso') || a('pesoKg'))} kg` : '');
       campo('Tipo de piel',       sv(a('skinType')));
 
       // ── 2. Direccion de envio ─────────────────────────────
@@ -1045,6 +1090,7 @@ function buildEmailHTML(data) {
       ${row('Fecha de nacimiento', s(data.fechaNacimiento||a('birthdate')))}
       ${row('Sexo biológico', s(data.sexo||a('sex')))}
       ${row('Edad (rango)', s(a('ageRange')))}
+      ${row('Peso', normalizeWeightKg(data.weight || data.peso || a('weight') || a('peso') || a('pesoKg')) ? `${normalizeWeightKg(data.weight || data.peso || a('weight') || a('peso') || a('pesoKg'))} kg` : '')}
       ${row('Tipo de piel', s(a('skinType')))}
       ${row('Ciudad / Estado', s(a('cityState')))}
     </table>
@@ -1224,6 +1270,7 @@ async function sendPaymentConfirmedEmail(row, paymentIntentId) {
     `Paciente: ${nombre}`,
     `Correo: ${row.correo || row.email || 'N/A'}`,
     `WhatsApp: ${row.whatsapp || 'N/A'}`,
+    `Peso: ${normalizeWeightKg(row.weight || row.peso || row.answers?.weight || row.answers?.peso || row.answers?.pesoKg) || 'N/A'} kg`,
     `Plan: ${plan}`,
     `Medicamento: ${sanitizeText(row.medication || 'N/A', 40)}`,
     `Precio: $${row.price || 0} MXN`,
@@ -1404,9 +1451,11 @@ app.post('/api/intake', upload.any(), async (req, res) => {
     ? STATES.PAGADO
     : STATES.CHECKOUT_PENDIENTE;
   const folio = getOrCreateFolio(body.folio_dermatika || body.internal_folio || body.patient_reference);
-  const plan = sanitizeText(body.plan || body.plan_name || '', 40) || null;
-  const medication = sanitizeText(body.medication || '', 40) || null;
-  const price = Number(body.price || body.plan_price || 0) || null;
+  let plan = sanitizeText(body.planLabel || body.plan_label || body.plan_name || body.plan || '', 80) || null;
+  let planLabel = sanitizeText(body.planLabel || body.plan_label || body.plan_name || body.plan || '', 80) || null;
+  let planKey = normalizePlanKey(body.planKey || body.plan_key || body.plan || body.planLabel || body.plan_label || body.plan_name || '');
+  let medication = sanitizeText(body.medication || '', 40) || null;
+  let price = Number(body.price || body.plan_price || 0) || null;
 
   // Guardar fotos como base64 — soporta tanto archivos multipart como base64 en campos
   const fileSummaries = [];
@@ -1467,6 +1516,17 @@ app.post('/api/intake', upload.any(), async (req, res) => {
     console.error('[INTAKE] Error parseando answers_json:', e.message);
   }
 
+  const finalPlan = resolvePlanSelection(body, parsedAnswers);
+  if (finalPlan.planKey) {
+    planKey = finalPlan.planKey;
+    plan = finalPlan.plan;
+    planLabel = finalPlan.planLabel;
+    medication = finalPlan.medication;
+    price = finalPlan.price;
+  }
+  console.log('[PLAN] seleccionado:', planLabel || plan || '(sin plan)', '| key:', planKey || '(sin key)');
+  console.log('[PRECIO] seleccionado:', price || 0);
+
   // ── 2. Parsear patient JSON (datos del paciente separados) ─────────────
   let patientData = {};
   try {
@@ -1489,8 +1549,9 @@ app.post('/api/intake', upload.any(), async (req, res) => {
   const whatsapp = normalizePhone(pt.whatsapp || pa.whatsapp || pa.phone || pa.leadWhatsapp || body.whatsapp || body.phone || '');
   const fechaNac = sanitizeText(pt.fechaNacimiento || pa.fechaNacimiento || pa.birthdate || body.fechaNacimiento || body.birthdate || '', 80);
   const sexo     = sanitizeText(pt.sexo || pa.sexo || pa.sex || pa.gender || body.sexo || body.sex || '', 20);
+  const peso     = normalizeWeightKg(pt.weight || pt.peso || pa.weight || pa.peso || pa.pesoKg || body.weight || body.peso || body.pesoKg || '');
 
-  console.log('[INTAKE] Paciente → nombre:', nombre||'(vacío)', '| correo:', correo||'(vacío)', '| sexo:', sexo||'(vacío)');
+  console.log('[INTAKE] Paciente → nombre:', nombre||'(vacío)', '| correo:', correo||'(vacío)', '| sexo:', sexo||'(vacío)', '| peso:', peso || '(vacío)');
   console.log('[INTAKE] Acné → severidad:', pa.acneSeverity||pa.acne||'(vacío)', '| duración:', pa.duration||pa.tiempo||'(vacío)');
   console.log('[INTAKE] Dirección → calle:', pt.shipAddress1||pa.shipAddress1||'(vacío)', '| colonia:', pt.shipNeighborhood||pa.shipNeighborhood||'(vacío)');
 
@@ -1536,8 +1597,12 @@ app.post('/api/intake', upload.any(), async (req, res) => {
     whatsapp,
     fechaNacimiento: fechaNac,
     sexo,
+    weight: peso || null,
+    peso: peso || null,
     status,
     plan,
+    planLabel,
+    plan_key: planKey || null,
     medication,
     price,
     folio,
@@ -1576,12 +1641,13 @@ app.post('/api/intake', upload.any(), async (req, res) => {
 // ✅ Crear Payment Intent con Stripe
 async function createPaymentIntentHandler(req, res) {
   try {
-    console.log('[STRIPE] ← Solicitud de pago recibida, plan:', req.body?.planKey);
     if (!stripe || !stripePublic) {
       console.error('[STRIPE] ❌ Stripe no configurado — faltan keys');
       return res.status(503).json({ ok: false, error: 'stripe_not_configured' });
     }
-    const planKey = normalizePlanKey(req.body?.planKey || '');
+    const requestedPlan = resolvePlanSelection(req.body || {});
+    const planKey = requestedPlan.planKey;
+    console.log('[STRIPE] ← Solicitud de pago recibida, plan:', planKey || req.body?.planKey || req.body?.plan);
     const requestedAmount = Number(req.body?.amount || 0);
     if (!planKey || !PLAN_PRICE_MAP[planKey]) {
       return res.status(400).json({ ok: false, error: 'invalid_plan' });
@@ -1603,6 +1669,8 @@ async function createPaymentIntentHandler(req, res) {
     const patientName = sanitizeText(req.body?.patientName || req.body?.nombre || '', 120);
     const medication = sanitizeText(req.body?.medication || '', 60);
     const planName = sanitizeText(req.body?.planName || req.body?.plan_name || planKey, 80);
+    console.log('[PLAN] seleccionado:', expectedPlan.planLabel, '| key:', planKey);
+    console.log('[PRECIO] seleccionado:', expectedPlan.price);
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: expectedAmount,
@@ -1613,7 +1681,9 @@ async function createPaymentIntentHandler(req, res) {
         nombre: patientName,
         correo: email,
         whatsapp: phone,
-        plan: expectedPlan.plan,
+        plan: planKey,
+        planLabel: expectedPlan.planLabel,
+        plan_name: expectedPlan.plan,
         medicamento: expectedPlan.medication,
         precio: String(expectedAmount / 100),
         sexo,
@@ -1675,17 +1745,22 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
       if (Array.isArray(body.photos_base64)) photosBase64 = body.photos_base64;
     } catch(e) {}
 
-    const planFromFE  = sanitizeText(body.plan || answersData.selectedPlan || '', 40);
-    const medFromFE   = sanitizeText(body.medication || answersData.selectedMedication || '', 40);
-    const priceFromFE = Number(body.price || answersData.selectedPrice || 0);
-
-    console.log('[CONFIRM] folio:', folio, '| pi:', paymentIntentId, '| plan:', planFromFE);
-    console.log('[CONFIRM] patient:', patientData.nombre||'(vacío)', patientData.apellido||'');
-    console.log('[CONFIRM] answers keys:', Object.keys(answersData).length, '| shipping:', !!shippingData.shipAddress1, '| fotos base64:', photosBase64.length);
     if (!paymentIntentId) return res.status(400).json({ ok: false, error: 'missing_payment_intent_id' });
 
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
     const paid = pi?.status === 'succeeded';
+    const finalPlan = resolvePlanSelection(body, answersData, pi?.metadata || {});
+    const planFromFE  = finalPlan.plan;
+    const planLabelFromFE = finalPlan.planLabel;
+    const planKeyFromFE = finalPlan.planKey;
+    const medFromFE   = finalPlan.medication;
+    const priceFromFE = finalPlan.price;
+    const pesoFromFE = normalizeWeightKg(patientData.weight || patientData.peso || answersData.weight || answersData.peso || answersData.pesoKg || body.weight || body.peso || body.pesoKg || '');
+
+    console.log('[CONFIRM] folio:', folio, '| pi:', paymentIntentId, '| plan:', planFromFE);
+    console.log('[CONFIRM] patient:', patientData.nombre||'(vacío)', patientData.apellido||'', '| peso:', pesoFromFE || '(vacío)');
+    console.log('[CONFIRM] answers keys:', Object.keys(answersData).length, '| shipping:', !!shippingData.shipAddress1, '| fotos base64:', photosBase64.length);
+    console.log('[CONFIRM] plan final:', planLabelFromFE || planFromFE || '(sin plan)', '| key:', planKeyFromFE || '(sin key)', '| precio:', priceFromFE || 0);
 
     const db = readDb();
     const idx = db.findIndex((row) => String(row.folio || '').toLowerCase() === folio.toLowerCase());
@@ -1698,6 +1773,8 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
       db[idx].updatedAt = new Date().toISOString();
       // Actualizar datos que llegaron en confirm (más completos que en el intake inicial)
       if (planFromFE  ) db[idx].plan       = planFromFE;
+      if (planLabelFromFE) db[idx].planLabel = planLabelFromFE;
+      if (planKeyFromFE) db[idx].plan_key = planKeyFromFE;
       if (medFromFE   ) db[idx].medication = medFromFE;
       if (priceFromFE ) db[idx].price      = priceFromFE;
       // Enriquecer con datos del paciente si el registro los tenía vacíos
@@ -1706,6 +1783,10 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
       if (patientData.correo   && !db[idx].correo  ) db[idx].correo   = sanitizeText(patientData.correo, 120);
       if (patientData.whatsapp && !db[idx].whatsapp) db[idx].whatsapp = sanitizeText(patientData.whatsapp, 30);
       if (patientData.sexo     && !db[idx].sexo    ) db[idx].sexo     = sanitizeText(patientData.sexo, 20);
+      if (pesoFromFE) {
+        db[idx].weight = pesoFromFE;
+        db[idx].peso = pesoFromFE;
+      }
       // Enriquecer answers si el registro los tenía vacíos
       if (Object.keys(answersData).length > 0 && (!db[idx].answers || Object.keys(db[idx].answers||{}).length === 0)) {
         db[idx].answers = answersData;
@@ -1739,7 +1820,10 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
         correo: sanitizeText(patientData.correo||'', 120),
         whatsapp: sanitizeText(patientData.whatsapp||'', 30),
         sexo: sanitizeText(patientData.sexo||'', 20),
-        plan: planFromFE, medication: medFromFE, price: priceFromFE,
+        weight: pesoFromFE || null,
+        peso: pesoFromFE || null,
+        plan: planFromFE, planLabel: planLabelFromFE, plan_key: planKeyFromFE,
+        medication: medFromFE, price: priceFromFE,
         answers: answersData, shipping: shippingData,
         files: photosBase64.map((p,i)=>({field:`photo_${i+1}`,name:p.name||`foto-${i+1}.jpg`,type:p.type||'image/jpeg',data:p.data||null})).filter(f=>f.data),
         payment_reference: paymentIntentId, payment_status: paid?'succeeded':'unknown',
@@ -1846,6 +1930,15 @@ app.post('/api/stripe-webhook',
         db[idx].payment_status = 'succeeded';
         db[idx].status = STATES.PAGADO;
         db[idx].updatedAt = new Date().toISOString();
+        const finalPlan = resolvePlanSelection(pi.metadata || {}, db[idx].answers || {}, db[idx]);
+        if (finalPlan.planKey) {
+          db[idx].plan = finalPlan.plan;
+          db[idx].planLabel = finalPlan.planLabel;
+          db[idx].plan_key = finalPlan.planKey;
+          db[idx].medication = finalPlan.medication;
+          db[idx].price = finalPlan.price;
+          console.log('[CONFIRM] plan final:', finalPlan.planLabel, '| key:', finalPlan.planKey, '| precio:', finalPlan.price);
+        }
         const updatedRow = db[idx];
         writeDb(db);
 
@@ -1968,6 +2061,7 @@ app.get('/api/medical-get', async (req, res) => {
         folio:          row.folio,
         nombre:         `${row.nombre||''} ${row.apellido||''}`.trim(),
         edad:           av(pa.ageRange || pa.edad),
+        peso:           normalizeWeightKg(row.weight || row.peso || pa.weight || pa.peso || pa.pesoKg) || 'N/A',
         sexo:           row.sexo || pa.sex || pa.sexo || 'N/A',
         acne_severidad: pa.acneSeverity || pa.acne || 'N/A',
         acne_duracion:  pa.duration || pa.tiempo || 'N/A',
