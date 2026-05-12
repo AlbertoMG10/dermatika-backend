@@ -358,47 +358,92 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
   const av = v => Array.isArray(v) ? v.filter(Boolean).join(', ') : sv(v);
 
   const edadReal = calcularEdad(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate);
+  const precioNum = Number(row.price || pa.selectedPrice || 0) || 0;
 
-  // Todos los campos como texto plano — sin select ni number
   const fields = {
+    // ── Identificación ─────────────────────────────────────────
     'Folio':      sv(row.folio),
     'Fecha':      new Date().toISOString().split('T')[0],
     'Nombre':     (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.nombre),
     'Telefono':   sv(row.whatsapp || pa.whatsapp || pa.phone),
     'Email':      sv(row.correo   || pa.correo   || pa.email),
-    'Edad':       edadReal || sv(pa.ageRange || pa.edad),
+    'Edad':       edadReal ? Number(edadReal) : undefined,
     'Sexo':       sv(row.sexo || pa.sexo || pa.sex),
-    'Plan':       sv(row.plan),
-    'Medicamento': sv(row.medication),
-    'Precio':     row.price ? String(row.price) : '',
-    'Estado pago': sv(row.payment_status || 'pendiente'),
-    'Acne severidad': sv(pa.acneSeverity || pa.acne),
-    'Tiempo con acne': sv(pa.duration || pa.tiempo),
-    'Zonas afectadas': av(pa.acneAreas || pa.zonas),
-    'Tratamientos previos': av(pa.previousTreatments),
-    'Isotretinaina previa': sv(pa.isotretinoinBefore),
-    'Salud general': sv(pa.generalHealth),
-    'Medicamentos actuales': sv(pa.currentMedications),
-    'Alergias': sv(pa.allergies),
-    'Salud mental': av(pa.mentalHealth),
+    'Tipo piel':  sv(pa.skinType || pa.tipoPiel),
+    'Ciudad':     sv(pa.cityState || pt.shipCity),
+    'Estado dir': sv(pt.shipState || pa.shipState),
+    // ── Plan y pago ────────────────────────────────────────────
+    'Plan':           sv(row.plan),
+    'Medicamento':    sv(row.medication),
+    'Precio':         precioNum || undefined,
+    'Estado pago':    sv(row.payment_status || 'pendiente'),
+    'Ref Stripe':     sv(row.payment_reference || paymentIntentId),
+    // ── Información del acné ───────────────────────────────────
+    'Acne severidad':           sv(pa.acneSeverity || pa.acne),
+    'Tiempo con acne':          sv(pa.duration || pa.tiempo),
+    'Zonas afectadas':          av(pa.acneAreas || pa.zonas),
+    'Tipo de lesiones':         av(pa.acneType),
+    'Dolor':                    sv(pa.acnePain),
+    'Impacto emocional':        sv(pa.acnePsychological),
+    'Ha empeorado':             sv(pa.acneWorsening),
+    'Factores':                 av(pa.acneTriggers),
+    // ── Historial de tratamientos ──────────────────────────────
+    'Tratamientos previos':     av(pa.previousTreatments),
+    'Respuesta tratamientos':   sv(pa.treatmentResponse),
+    'Antibioticos 3 meses':     sv(pa.antibioticDuration),
+    'Isotretinaina previa':     sv(pa.isotretinoinBefore),
+    'Efectos adversos':         av(pa.isotretinoinSideEffects),
+    // ── Salud general ──────────────────────────────────────────
+    'Salud general':            sv(pa.generalHealth),
+    'Condiciones cronicas':     av(pa.chronicConditions),
+    'Medicamentos actuales':    sv(pa.currentMedications),
+    'Detalle medicamentos':     sv(pa.currentMedicationsDetail),
+    'Vitamina A Retinol':       sv(pa.vitaminA),
+    'Tetraciclinas activas':    sv(pa.tetracyclines),
+    // ── Contraindicaciones ─────────────────────────────────────
+    'Enfermedad hepatica':      sv(pa.liverCondition),
+    'Colesterol Trigliceridos': sv(pa.lipidProfile),
+    'Enfermedad renal':         sv(pa.kidneyCondition),
+    'Alergias':                 sv(pa.allergies),
+    'Detalle alergias':         sv(pa.allergiesDetail),
+    'Cirugia reciente':         sv(pa.recentSurgery),
+    'Donador sangre':           sv(pa.bloodDonation),
+    // ── Salud mental ───────────────────────────────────────────
+    'Salud mental':             av(pa.mentalHealth),
+    'Ideas suicidas':           sv(pa.suicidalIdeation),
+    'Medicamentos psiquiatricos': sv(pa.mentalHealthMeds),
+    // ── Embarazo y anticoncepción ──────────────────────────────
+    'Embarazo lactancia':       sv(pa.pregnancyStatus || pa.breastfeeding),
+    'Anticoncepcion':           sv(pa.contraception),
+    // ── Hábitos ────────────────────────────────────────────────
+    'Alcohol':                  sv(pa.alcoholConsumption),
+    'Exposicion solar':         sv(pa.sunExposure),
+    'Lentes contacto':          sv(pa.contactLenses),
+    // ── Dirección ──────────────────────────────────────────────
+    'Direccion':    sv(pt.shipAddress1 || pa.shipAddress1),
+    'Colonia':      sv(pt.shipNeighborhood || pa.shipNeighborhood),
+    'CP':           sv(pt.shipZip || pa.shipZip),
+    'Municipio':    sv(pt.shipMunicipality || pa.shipMunicipality),
+    // ── Adjuntos ───────────────────────────────────────────────
     'Fotos': (row.files && row.files.length > 0) ? 'Fotos enviadas por correo' : '',
-    'PDF': 'PDF enviado por correo',
+    'PDF':   'PDF enviado por correo',
   };
 
-  // Eliminar campos vacíos
-  Object.keys(fields).forEach(k => { if (!fields[k]) delete fields[k]; });
+  // Eliminar undefined y strings vacíos
+  Object.keys(fields).forEach(k => {
+    const v = fields[k];
+    if (v === undefined || v === null || v === '') delete fields[k];
+  });
 
   console.log('[AIRTABLE] Guardando en CRM ADMIN — folio:', sv(row.folio),
     '| campos:', Object.keys(fields).length);
 
   try {
     const existingId = await _findAirtableRecord(AIRTABLE_TABLE_ADMIN, sv(row.folio));
-    let result;
-    if (existingId) {
-      result = await _airtableRequest('PATCH', AIRTABLE_TABLE_ADMIN, existingId, { fields });
-    } else {
-      result = await _airtableRequest('POST', AIRTABLE_TABLE_ADMIN, null, { fields });
-    }
+    const result = existingId
+      ? await _airtableRequest('PATCH', AIRTABLE_TABLE_ADMIN, existingId, { fields })
+      : await _airtableRequest('POST',  AIRTABLE_TABLE_ADMIN, null,       { fields });
+
     if (!result.ok) {
       const errMsg = result.data?.error?.message || result.data?.error?.type || JSON.stringify(result.data?.error || result.data);
       console.error('[AIRTABLE ERROR]', result.status, errMsg);
@@ -406,7 +451,7 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
       return false;
     }
     const rid = result.data.id || existingId;
-    console.log('[AIRTABLE ADMIN OK] record:', rid, '| folio:', sv(row.folio));
+    console.log('[AIRTABLE ADMIN OK] record:', rid, '| campos guardados:', Object.keys(fields).length);
     return rid;
   } catch (err) {
     console.error('[AIRTABLE ERROR] Excepcion en CRM ADMIN:', err.message || String(err));
