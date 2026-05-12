@@ -1,4 +1,5 @@
 'use strict';
+console.log("VERSION SERVER CRM FIX 12-MAYO-10:35");
 
 const express  = require('express');
 const fs       = require('fs');
@@ -316,6 +317,30 @@ function _buildPhotoAttachments(files) {
   return [];
 }
 
+// ── HELPER: calcular edad desde birthdate ────────────────────────
+function calcularEdad(birthdate) {
+  if (!birthdate) return '';
+  try {
+    // Soporta formatos: YYYY-MM-DD, DD/MM/YYYY, texto libre
+    const str = String(birthdate).trim();
+    let fecha;
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+      fecha = new Date(str);
+    } else if (/^\d{2}\/\d{2}\/\d{4}/.test(str)) {
+      const [d, m, y] = str.split('/');
+      fecha = new Date(`${y}-${m}-${d}`);
+    } else {
+      fecha = new Date(str);
+    }
+    if (isNaN(fecha.getTime())) return '';
+    const hoy  = new Date();
+    let edad   = hoy.getFullYear() - fecha.getFullYear();
+    const mes  = hoy.getMonth() - fecha.getMonth();
+    if (mes < 0 || (mes === 0 && hoy.getDate() < fecha.getDate())) edad--;
+    return edad > 0 && edad < 120 ? String(edad) : '';
+  } catch(e) { return ''; }
+}
+
 // ── GUARDAR EN CRM ADMIN (ventas/admin) ──────────────────────────
 async function saveToAirtableAdmin(row, paymentIntentId) {
   if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) {
@@ -324,54 +349,72 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
   }
 
   const pa = row.answers  || {};
+  const pt = row.shipping || {};
   const sv = (v, fb = '') => {
     if (v === null || v === undefined) return fb;
     const str = String(v).trim();
     return (str === '' || str === 'undefined' || str === 'null') ? fb : str;
   };
+  const av = v => Array.isArray(v) ? v.filter(Boolean).join(', ') : sv(v);
 
-  // Campos exactos de la tabla CRM ADMIN
+  const edadReal = calcularEdad(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate);
+
+  // Todos los campos como texto plano — sin select ni number
   const fields = {
-    'Folio':    sv(row.folio),
-    'Fecha':    new Date().toISOString().split('T')[0],
-    'Nombre':   (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.nombre),
-    'Telefono': sv(row.whatsapp || pa.whatsapp || pa.phone),
-    'Email':    sv(row.correo   || pa.correo   || pa.email),
-    'Edad':     sv(pa.ageRange  || pa.edad     || pa.age),
-    'Sexo':     sv(row.sexo     || pa.sexo     || pa.sex),
+    'Folio':      sv(row.folio),
+    'Fecha':      new Date().toISOString().split('T')[0],
+    'Nombre':     (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.nombre),
+    'Telefono':   sv(row.whatsapp || pa.whatsapp || pa.phone),
+    'Email':      sv(row.correo   || pa.correo   || pa.email),
+    'Edad':       edadReal || sv(pa.ageRange || pa.edad),
+    'Sexo':       sv(row.sexo || pa.sexo || pa.sex),
+    'Plan':       sv(row.plan),
+    'Medicamento': sv(row.medication),
+    'Precio':     row.price ? String(row.price) : '',
+    'Estado pago': sv(row.payment_status || 'pendiente'),
+    'Acne severidad': sv(pa.acneSeverity || pa.acne),
+    'Tiempo con acne': sv(pa.duration || pa.tiempo),
+    'Zonas afectadas': av(pa.acneAreas || pa.zonas),
+    'Tratamientos previos': av(pa.previousTreatments),
+    'Isotretinaina previa': sv(pa.isotretinoinBefore),
+    'Salud general': sv(pa.generalHealth),
+    'Medicamentos actuales': sv(pa.currentMedications),
+    'Alergias': sv(pa.allergies),
+    'Salud mental': av(pa.mentalHealth),
+    'Fotos': (row.files && row.files.length > 0) ? 'Fotos enviadas por correo' : '',
+    'PDF': 'PDF enviado por correo',
   };
 
   // Eliminar campos vacíos
   Object.keys(fields).forEach(k => { if (!fields[k]) delete fields[k]; });
 
   console.log('[AIRTABLE] Guardando en CRM ADMIN — folio:', sv(row.folio),
-    '| campos:', Object.keys(fields).join(', '));
+    '| campos:', Object.keys(fields).length);
 
   try {
-    // Verificar si ya existe el registro
     const existingId = await _findAirtableRecord(AIRTABLE_TABLE_ADMIN, sv(row.folio));
     let result;
     if (existingId) {
       result = await _airtableRequest('PATCH', AIRTABLE_TABLE_ADMIN, existingId, { fields });
-      console.log('[AIRTABLE] CRM ADMIN actualizado — record id:', existingId);
     } else {
       result = await _airtableRequest('POST', AIRTABLE_TABLE_ADMIN, null, { fields });
-      if (result.ok) console.log('[AIRTABLE] Registro creado correctamente — record id:', result.data.id, '| folio:', sv(row.folio));
     }
     if (!result.ok) {
       const errMsg = result.data?.error?.message || result.data?.error?.type || JSON.stringify(result.data?.error || result.data);
       console.error('[AIRTABLE ERROR]', result.status, errMsg);
-      console.error('[AIRTABLE ERROR] Campos enviados:', JSON.stringify(fields));
+      console.error('[AIRTABLE ERROR] Campos enviados:', Object.keys(fields).join(', '));
       return false;
     }
-    return result.data.id || existingId;
+    const rid = result.data.id || existingId;
+    console.log('[AIRTABLE ADMIN OK] record:', rid, '| folio:', sv(row.folio));
+    return rid;
   } catch (err) {
     console.error('[AIRTABLE ERROR] Excepcion en CRM ADMIN:', err.message || String(err));
     return false;
   }
 }
 
-// ── GUARDAR EN CRM MEDICO (doctor) — solo campos esenciales ───────
+// ── GUARDAR EN CRM MEDICO (doctor) — solo campos esenciales ─────
 async function saveToAirtableMedico(row) {
   if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) return false;
 
@@ -382,28 +425,25 @@ async function saveToAirtableMedico(row) {
     return (str === '' || str === 'undefined' || str === 'null') ? fb : str;
   };
 
-  // Solo los campos que existen en CRM MEDICO — nada del cuestionario clínico
-  // El cuestionario completo va en el PDF adjunto al correo
+  const edadReal = calcularEdad(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate);
+
+  // SOLO estos campos — el cuestionario completo queda en el PDF
   const fields = {
-    'Folio':       sv(row.folio),
-    'Fecha':       new Date().toISOString().split('T')[0],
-    'Nombre':      (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.nombre),
-    'Edad':        sv(pa.ageRange || pa.edad || pa.age),
-    'Sexo':        sv(row.sexo   || pa.sexo || pa.sex),
-    'Tipo piel':   sv(pa.skinType || pa.tipoPiel),
-    'Plan':        sv(row.plan),
-    'Medicamento': sv(row.medication),
+    'Folio':          sv(row.folio),
+    'Fecha':          new Date().toISOString().split('T')[0],
+    'Nombre':         (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.nombre),
+    'Edad':           edadReal || sv(pa.ageRange || pa.edad),
+    'Sexo':           sv(row.sexo || pa.sexo || pa.sex),
+    'Tipo piel':      sv(pa.skinType || pa.tipoPiel),
+    'Plan':           sv(row.plan),
+    'Medicamento':    sv(row.medication),
     'Acne severidad': sv(pa.acneSeverity || pa.acne),
-    // Campos médicos — el doctor los llena desde Airtable
-    'Estado medico':          'Pendiente revision',
-    'Receta medica':          '',
-    'Dosis indicada':         '',
-    'Indicaciones skincare':  '',
-    'Comentarios del medico': '',
-    'Fecha revision medica':  '',
+    'Fotos':          (row.files && row.files.length > 0) ? 'Fotos enviadas por correo' : '',
+    'PDF':            'PDF enviado por correo',
+    'Estado medico':  'Pendiente revision',
   };
 
-  // Eliminar campos vacíos — Airtable rechaza strings vacíos
+  // Eliminar campos vacíos
   Object.keys(fields).forEach(k => { if (!fields[k]) delete fields[k]; });
 
   console.log('[AIRTABLE] Guardando en CRM MEDICO — folio:', sv(row.folio),
@@ -414,10 +454,8 @@ async function saveToAirtableMedico(row) {
     let result;
     if (existingId) {
       result = await _airtableRequest('PATCH', AIRTABLE_TABLE_MEDICO, existingId, { fields });
-      console.log('[AIRTABLE] CRM MEDICO actualizado — record id:', existingId);
     } else {
       result = await _airtableRequest('POST', AIRTABLE_TABLE_MEDICO, null, { fields });
-      if (result.ok) console.log('[AIRTABLE] Registro creado correctamente en CRM MEDICO — record id:', result.data.id);
     }
     if (!result.ok) {
       const errMsg = result.data?.error?.message || result.data?.error?.type || JSON.stringify(result.data?.error || result.data);
@@ -425,7 +463,9 @@ async function saveToAirtableMedico(row) {
       console.error('[AIRTABLE ERROR] Campos enviados:', Object.keys(fields).join(', '));
       return false;
     }
-    return result.data.id || existingId;
+    const rid = result.data.id || existingId;
+    console.log('[AIRTABLE MEDICO OK] record:', rid, '| folio:', sv(row.folio));
+    return rid;
   } catch (err) {
     console.error('[AIRTABLE ERROR] Excepcion en CRM MEDICO:', err.message || String(err));
     return false;
@@ -482,7 +522,7 @@ async function sendInternalMail(subject, text, attachments = [], htmlContent = n
     });
     const data = await res.json();
     if (res.ok) {
-      console.log('[MAIL] ✅ Enviado via Resend:', subject, '| id:', data.id, '| adjuntos:', payload.attachments?.length || 0);
+      console.log('[MAIL OK] Enviado via Resend:', subject, '| id:', data.id, '| adjuntos:', payload.attachments?.length || 0);
       return true;
     } else {
       console.error('[MAIL] ❌ Resend error:', JSON.stringify(data));
@@ -1116,7 +1156,7 @@ async function sendPaymentConfirmedEmail(row, paymentIntentId) {
       content: pdfBuf.toString('base64'),
       contentType: 'application/pdf'
     };
-    console.log('[MAIL] ✅ PDF generado:', pdfAttachment.filename, '| bytes:', pdfBuf.length);
+    console.log('[PDF OK] Generado:', pdfAttachment.filename, '| bytes:', pdfBuf.length);
   } catch (pdfErr) {
     console.error('[MAIL] ❌ Error PDF:', pdfErr.message);
   }
