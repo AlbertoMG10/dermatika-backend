@@ -161,6 +161,12 @@ function normalizeWeightKg(v = '') {
   return String(Math.round(weight * 10) / 10);
 }
 
+function normalizeAge(v = '') {
+  const age = Number(String(v || '').replace(/\D/g, ''));
+  if (!Number.isFinite(age) || age < 1 || age > 120) return '';
+  return String(Math.floor(age));
+}
+
 function makeId(prefix = 'row') {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
 }
@@ -397,7 +403,8 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
   };
   const av = v => Array.isArray(v) ? v.filter(Boolean).join(', ') : sv(v);
 
-  const edadReal = calcularEdad(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate);
+  const edadReal = normalizeAge(row.age || row.edad || pa.age || pa.edad) ||
+    calcularEdad(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate);
   const precioNum = Number(row.price || pa.selectedPrice || 0) || 0;
   const pesoKg = normalizeWeightKg(row.weight || row.peso || pa.weight || pa.peso || pa.pesoKg);
 
@@ -512,7 +519,8 @@ async function saveToAirtableMedico(row) {
     return (str === '' || str === 'undefined' || str === 'null') ? fb : str;
   };
 
-  const edadReal = calcularEdad(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate);
+  const edadReal = normalizeAge(row.age || row.edad || pa.age || pa.edad) ||
+    calcularEdad(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate);
   const pesoKg = normalizeWeightKg(row.weight || row.peso || pa.weight || pa.peso || pa.pesoKg);
 
   // SOLO estos campos — el cuestionario completo queda en el PDF
@@ -520,7 +528,7 @@ async function saveToAirtableMedico(row) {
     'Folio':          sv(row.folio),
     'Fecha':          new Date().toISOString().split('T')[0],
     'Nombre':         (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.nombre),
-    'Edad':           edadReal || sv(pa.ageRange || pa.edad),
+    'Edad':           edadReal || undefined,
     'Peso':           pesoKg ? Number(pesoKg) : undefined,
     'Sexo':           sv(row.sexo || pa.sexo || pa.sex),
     'Tipo piel':      sv(pa.skinType || pa.tipoPiel),
@@ -827,7 +835,7 @@ function generateEvaluationPDF(data) {
       campo('WhatsApp',           sv(data.whatsapp || a('phone')));
       campo('Sexo biologico',     sv(data.sexo || a('sex')));
       campo('Fecha de nacimiento',sv(data.fechaNacimiento || a('birthdate')));
-      campo('Edad',               sv(a('ageRange')));
+      campo('Edad',               normalizeAge(data.age || data.edad || a('age') || a('edad')));
       campo('Peso',               normalizeWeightKg(data.weight || data.peso || a('weight') || a('peso') || a('pesoKg')) ? `${normalizeWeightKg(data.weight || data.peso || a('weight') || a('peso') || a('pesoKg'))} kg` : '');
       campo('Tipo de piel',       sv(a('skinType')));
 
@@ -1089,7 +1097,7 @@ function buildEmailHTML(data) {
       ${row('WhatsApp', s(data.whatsapp))}
       ${row('Fecha de nacimiento', s(data.fechaNacimiento||a('birthdate')))}
       ${row('Sexo biológico', s(data.sexo||a('sex')))}
-      ${row('Edad (rango)', s(a('ageRange')))}
+      ${row('Edad', normalizeAge(data.age || data.edad || a('age') || a('edad')))}
       ${row('Peso', normalizeWeightKg(data.weight || data.peso || a('weight') || a('peso') || a('pesoKg')) ? `${normalizeWeightKg(data.weight || data.peso || a('weight') || a('peso') || a('pesoKg'))} kg` : '')}
       ${row('Tipo de piel', s(a('skinType')))}
       ${row('Ciudad / Estado', s(a('cityState')))}
@@ -1270,6 +1278,7 @@ async function sendPaymentConfirmedEmail(row, paymentIntentId) {
     `Paciente: ${nombre}`,
     `Correo: ${row.correo || row.email || 'N/A'}`,
     `WhatsApp: ${row.whatsapp || 'N/A'}`,
+    `Edad: ${normalizeAge(row.age || row.edad || row.answers?.age || row.answers?.edad) || 'N/A'}`,
     `Peso: ${normalizeWeightKg(row.weight || row.peso || row.answers?.weight || row.answers?.peso || row.answers?.pesoKg) || 'N/A'} kg`,
     `Plan: ${plan}`,
     `Medicamento: ${sanitizeText(row.medication || 'N/A', 40)}`,
@@ -1548,10 +1557,11 @@ app.post('/api/intake', upload.any(), async (req, res) => {
   const correo   = sanitizeText(pt.correo   || pa.correo   || pa.email || pa.leadEmail || body.correo || body.email || '', 120);
   const whatsapp = normalizePhone(pt.whatsapp || pa.whatsapp || pa.phone || pa.leadWhatsapp || body.whatsapp || body.phone || '');
   const fechaNac = sanitizeText(pt.fechaNacimiento || pa.fechaNacimiento || pa.birthdate || body.fechaNacimiento || body.birthdate || '', 80);
+  const edad     = normalizeAge(pt.age || pt.edad || pa.age || pa.edad || body.age || body.edad || '');
   const sexo     = sanitizeText(pt.sexo || pa.sexo || pa.sex || pa.gender || body.sexo || body.sex || '', 20);
   const peso     = normalizeWeightKg(pt.weight || pt.peso || pa.weight || pa.peso || pa.pesoKg || body.weight || body.peso || body.pesoKg || '');
 
-  console.log('[INTAKE] Paciente → nombre:', nombre||'(vacío)', '| correo:', correo||'(vacío)', '| sexo:', sexo||'(vacío)', '| peso:', peso || '(vacío)');
+  console.log('[INTAKE] Paciente → nombre:', nombre||'(vacío)', '| correo:', correo||'(vacío)', '| edad:', edad || '(vacío)', '| sexo:', sexo||'(vacío)', '| peso:', peso || '(vacío)');
   console.log('[INTAKE] Acné → severidad:', pa.acneSeverity||pa.acne||'(vacío)', '| duración:', pa.duration||pa.tiempo||'(vacío)');
   console.log('[INTAKE] Dirección → calle:', pt.shipAddress1||pa.shipAddress1||'(vacío)', '| colonia:', pt.shipNeighborhood||pa.shipNeighborhood||'(vacío)');
 
@@ -1596,6 +1606,8 @@ app.post('/api/intake', upload.any(), async (req, res) => {
     correo,
     whatsapp,
     fechaNacimiento: fechaNac,
+    age: edad || null,
+    edad: edad || null,
     sexo,
     weight: peso || null,
     peso: peso || null,
@@ -1755,10 +1767,11 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
     const planKeyFromFE = finalPlan.planKey;
     const medFromFE   = finalPlan.medication;
     const priceFromFE = finalPlan.price;
+    const edadFromFE = normalizeAge(patientData.age || patientData.edad || answersData.age || answersData.edad || body.age || body.edad || '');
     const pesoFromFE = normalizeWeightKg(patientData.weight || patientData.peso || answersData.weight || answersData.peso || answersData.pesoKg || body.weight || body.peso || body.pesoKg || '');
 
     console.log('[CONFIRM] folio:', folio, '| pi:', paymentIntentId, '| plan:', planFromFE);
-    console.log('[CONFIRM] patient:', patientData.nombre||'(vacío)', patientData.apellido||'', '| peso:', pesoFromFE || '(vacío)');
+    console.log('[CONFIRM] patient:', patientData.nombre||'(vacío)', patientData.apellido||'', '| edad:', edadFromFE || '(vacío)', '| peso:', pesoFromFE || '(vacío)');
     console.log('[CONFIRM] answers keys:', Object.keys(answersData).length, '| shipping:', !!shippingData.shipAddress1, '| fotos base64:', photosBase64.length);
     console.log('[CONFIRM] plan final:', planLabelFromFE || planFromFE || '(sin plan)', '| key:', planKeyFromFE || '(sin key)', '| precio:', priceFromFE || 0);
 
@@ -1783,6 +1796,10 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
       if (patientData.correo   && !db[idx].correo  ) db[idx].correo   = sanitizeText(patientData.correo, 120);
       if (patientData.whatsapp && !db[idx].whatsapp) db[idx].whatsapp = sanitizeText(patientData.whatsapp, 30);
       if (patientData.sexo     && !db[idx].sexo    ) db[idx].sexo     = sanitizeText(patientData.sexo, 20);
+      if (edadFromFE) {
+        db[idx].age = edadFromFE;
+        db[idx].edad = edadFromFE;
+      }
       if (pesoFromFE) {
         db[idx].weight = pesoFromFE;
         db[idx].peso = pesoFromFE;
@@ -1820,6 +1837,8 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
         correo: sanitizeText(patientData.correo||'', 120),
         whatsapp: sanitizeText(patientData.whatsapp||'', 30),
         sexo: sanitizeText(patientData.sexo||'', 20),
+        age: edadFromFE || null,
+        edad: edadFromFE || null,
         weight: pesoFromFE || null,
         peso: pesoFromFE || null,
         plan: planFromFE, planLabel: planLabelFromFE, plan_key: planKeyFromFE,
@@ -2060,7 +2079,7 @@ app.get('/api/medical-get', async (req, res) => {
       expediente: {
         folio:          row.folio,
         nombre:         `${row.nombre||''} ${row.apellido||''}`.trim(),
-        edad:           av(pa.ageRange || pa.edad),
+        edad:           normalizeAge(row.age || row.edad || pa.age || pa.edad) || 'N/A',
         peso:           normalizeWeightKg(row.weight || row.peso || pa.weight || pa.peso || pa.pesoKg) || 'N/A',
         sexo:           row.sexo || pa.sex || pa.sexo || 'N/A',
         acne_severidad: pa.acneSeverity || pa.acne || 'N/A',
