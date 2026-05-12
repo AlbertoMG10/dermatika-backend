@@ -314,18 +314,23 @@ const AIRTABLE_API_KEY      = process.env.AIRTABLE_API_KEY      || '';
 const AIRTABLE_BASE_ID      = process.env.AIRTABLE_BASE_ID      || '';
 const AIRTABLE_TABLE_ADMIN  = process.env.AIRTABLE_TABLE_ADMIN  || process.env.AIRTABLE_TABLE || 'CRM ADMIN';
 const AIRTABLE_TABLE_MEDICO = process.env.AIRTABLE_TABLE_MEDICO || 'CRM MEDICO';
+const AIRTABLE_FIELD_CIUDAD = 'Ciudad';
 
 // Helper interno para llamadas a la API de Airtable
 async function _airtableRequest(method, tableName, recordId, body) {
   const base = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(tableName)}`;
   const url  = recordId ? `${base}/${recordId}` : base;
+  const payload = body ? { ...body } : undefined;
+  if (payload && Object.prototype.hasOwnProperty.call(payload, 'typecast')) {
+    delete payload.typecast;
+  }
   const res  = await fetch(url, {
     method,
     headers: {
       'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
       'Content-Type': 'application/json'
     },
-    body: body ? JSON.stringify(body) : undefined
+    body: payload ? JSON.stringify(payload) : undefined
   });
   const data = await res.json();
   return { ok: res.ok, status: res.status, data };
@@ -419,7 +424,7 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
     'Peso':       pesoKg ? Number(pesoKg) : undefined,
     'Sexo':       sv(row.sexo || pa.sexo || pa.sex),
     'Tipo piel':  sv(pa.skinType || pa.tipoPiel),
-    'Ciudad':     sv(pa.cityState || pt.shipCity),
+    [AIRTABLE_FIELD_CIUDAD]: sv(pa.cityState || pt.shipCity || pt.shipState || pa.shipState),
     'Estado dir': sv(pt.shipState || pa.shipState),
     // ── Plan y pago ────────────────────────────────────────────
     'Plan':           sv(row.plan),
