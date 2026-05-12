@@ -376,39 +376,93 @@ async function saveToAirtableMedico(row) {
   if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) return false;
 
   const pa = row.answers  || {};
+  const pt = row.shipping || {};
   const sv = (v, fb = '') => {
     if (v === null || v === undefined) return fb;
     const str = String(v).trim();
     return (str === '' || str === 'undefined' || str === 'null') ? fb : str;
   };
-  const av = v => Array.isArray(v) ? v.join(', ') : sv(v);
+  const av = v => Array.isArray(v) ? v.filter(Boolean).join(', ') : sv(v);
 
-  // Campos de CRM MEDICO — SIN teléfono ni email (privacidad)
+  // Campos exactos de la tabla CRM MEDICO — SIN Email ni Telefono
   const fields = {
-    'Folio':            sv(row.folio),
-    'Nombre':           (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.nombre),
-    'Edad':             sv(pa.ageRange || pa.edad || pa.age),
-    'Sexo':             sv(row.sexo || pa.sexo || pa.sex),
-    'Acne severidad':   sv(pa.acneSeverity || pa.acne),
-    // Campos médicos — inicialmente vacíos, el doctor los llena
-    'Receta medica':           '',
-    'Dosis indicada':          '',
-    'Indicaciones skincare':   '',
-    'Estado medico':           'Pendiente revision',
-    'Comentarios del medico':  '',
-    // Fotos — Airtable attachment (requiere URLs públicas)
-    // 'Fotos': _buildPhotoAttachments(row.files),
+    // ── Identificación ───────────────────────────────────────────
+    'Folio':             sv(row.folio),
+    'Fecha':             new Date().toISOString().split('T')[0],
+    'Nombre':            (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.nombre),
+    'Edad':              sv(pa.ageRange   || pa.edad || pa.age),
+    'Sexo':              sv(row.sexo      || pa.sexo || pa.sex),
+    'Tipo piel':         sv(pa.skinType   || pa.tipoPiel),
+    'Ciudad / Estado':   sv(pa.cityState  || pt.shipCity || pt.shipState),
+
+    // ── Plan y medicamento ────────────────────────────────────────
+    'Plan':              sv(row.plan),
+    'Medicamento':       sv(row.medication),
+
+    // ── Información del acné ──────────────────────────────────────
+    'Acne severidad':            sv(pa.acneSeverity    || pa.acne),
+    'Tiempo con acne':           sv(pa.duration        || pa.tiempo),
+    'Zonas afectadas':           av(pa.acneAreas       || pa.zonas),
+    'Tipo de lesiones':          av(pa.acneType),
+    'Dolor':                     sv(pa.acnePain),
+    'Impacto emocional':         sv(pa.acnePsychological),
+    'Ha empeorado':              sv(pa.acneWorsening),
+    'Factores desencadenantes':  av(pa.acneTriggers),
+
+    // ── Historial de tratamientos ─────────────────────────────────
+    'Tratamientos previos':      av(pa.previousTreatments),
+    'Respuesta a tratamientos':  sv(pa.treatmentResponse),
+    'Antibioticos 3 meses':      sv(pa.antibioticDuration),
+    'Isotretinaina previa':      sv(pa.isotretinoinBefore),
+    'Efectos adversos previos':  av(pa.isotretinoinSideEffects),
+
+    // ── Salud general ─────────────────────────────────────────────
+    'Salud general':             sv(pa.generalHealth),
+    'Condiciones cronicas':      av(pa.chronicConditions),
+    'Medicamentos actuales':     sv(pa.currentMedications),
+    'Detalle medicamentos':      sv(pa.currentMedicationsDetail),
+    'Vitamina A Retinol':        sv(pa.vitaminA),
+    'Tetraciclinas activas':     sv(pa.tetracyclines),
+
+    // ── Contraindicaciones ────────────────────────────────────────
+    'Enfermedad hepatica':       sv(pa.liverCondition),
+    'Colesterol Trigliceridos':  sv(pa.lipidProfile),
+    'Enfermedad renal':          sv(pa.kidneyCondition),
+    'Alergias':                  sv(pa.allergies),
+    'Detalle alergias':          sv(pa.allergiesDetail),
+    'Cirugia reciente':          sv(pa.recentSurgery),
+
+    // ── Salud mental ──────────────────────────────────────────────
+    'Salud mental':              av(pa.mentalHealth),
+    'Ideas suicidas':            sv(pa.suicidalIdeation),
+    'Medicamentos psiquiatricos':sv(pa.mentalHealthMeds),
+
+    // ── Embarazo y anticoncepción ─────────────────────────────────
+    'Embarazo lactancia':        sv(pa.pregnancyStatus || pa.breastfeeding),
+    'Anticoncepcion':            sv(pa.contraception),
+
+    // ── Campos médicos (doctor los llena desde Airtable) ─────────
+    'Estado medico':             'Pendiente revision',
+    'Receta medica':             '',
+    'Dosis indicada':            '',
+    'Indicaciones skincare':     '',
+    'Comentarios del medico':    '',
+    'Fecha revision medica':     '',
   };
 
-  // Eliminar campos vacíos excepto los médicos que deben existir aunque vacíos
-  const medicalFields = ['Receta medica','Dosis indicada','Indicaciones skincare','Estado medico','Comentarios del medico'];
+  // Eliminar campos vacíos — Airtable rechaza strings vacíos
+  // Excepto los campos médicos que deben existir aunque vacíos
+  const camposMedicos = [
+    'Estado medico','Receta medica','Dosis indicada',
+    'Indicaciones skincare','Comentarios del medico','Fecha revision medica'
+  ];
   Object.keys(fields).forEach(k => {
-    if (!medicalFields.includes(k) && !fields[k]) delete fields[k];
-    if (medicalFields.includes(k) && fields[k] === '') delete fields[k]; // dejar que Airtable inicie vacíos
+    if (!fields[k] && !camposMedicos.includes(k)) delete fields[k];
+    if (camposMedicos.includes(k) && fields[k] === '') delete fields[k];
   });
 
   console.log('[AIRTABLE] Guardando en CRM MEDICO — folio:', sv(row.folio),
-    '| campos:', Object.keys(fields).join(', '));
+    '| campos clinicos:', Object.keys(fields).length);
 
   try {
     const existingId = await _findAirtableRecord(AIRTABLE_TABLE_MEDICO, sv(row.folio));
@@ -423,6 +477,7 @@ async function saveToAirtableMedico(row) {
     if (!result.ok) {
       const errMsg = result.data?.error?.message || result.data?.error?.type || JSON.stringify(result.data?.error || result.data);
       console.error('[AIRTABLE ERROR]', result.status, errMsg);
+      console.error('[AIRTABLE ERROR] Campos enviados:', Object.keys(fields).join(', '));
       return false;
     }
     return result.data.id || existingId;
