@@ -412,6 +412,9 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
     calcularEdad(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate);
   const precioNum = Number(row.price || pa.selectedPrice || 0) || 0;
   const pesoKg = normalizeWeightKg(row.weight || row.peso || pa.weight || pa.peso || pa.pesoKg);
+  const cleanPlan = String(row.plan || '')
+    .trim()
+    .replace(/\s+/g, ' ');
 
   const fields = {
     // ── Identificación ─────────────────────────────────────────
@@ -427,7 +430,7 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
     [AIRTABLE_FIELD_CIUDAD]: sv(pa.cityState || pt.shipCity || pt.shipState || pa.shipState),
     'Estado dir': sv(pt.shipState || pa.shipState),
     // ── Plan y pago ────────────────────────────────────────────
-    'Plan':           sv(row.plan),
+    'Plan':           cleanPlan,
     'Medicamento':    sv(row.medication),
     'Precio':         precioNum || undefined,
     'Estado pago':    sv(row.payment_status || 'pendiente'),
@@ -491,6 +494,7 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
 
   console.log('[AIRTABLE] Guardando en CRM ADMIN — folio:', sv(row.folio),
     '| campos:', Object.keys(fields).length);
+  console.log('PLAN ENVIADO:', JSON.stringify(cleanPlan));
 
   try {
     const existingId = await _findAirtableRecord(AIRTABLE_TABLE_ADMIN, sv(row.folio));
@@ -527,6 +531,9 @@ async function saveToAirtableMedico(row) {
   const edadReal = normalizeAge(row.age || row.edad || pa.age || pa.edad) ||
     calcularEdad(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate);
   const pesoKg = normalizeWeightKg(row.weight || row.peso || pa.weight || pa.peso || pa.pesoKg);
+  const cleanPlan = String(row.plan || '')
+    .trim()
+    .replace(/\s+/g, ' ');
 
   // SOLO estos campos — el cuestionario completo queda en el PDF
   const fields = {
@@ -537,7 +544,7 @@ async function saveToAirtableMedico(row) {
     'Peso':           pesoKg ? Number(pesoKg) : undefined,
     'Sexo':           sv(row.sexo || pa.sexo || pa.sex),
     'Tipo piel':      sv(pa.skinType || pa.tipoPiel),
-    'Plan':           sv(row.plan),
+    'Plan':           cleanPlan,
     'Medicamento':    sv(row.medication),
     'Acne severidad': sv(pa.acneSeverity || pa.acne),
     'Fotos':          (row.files && row.files.length > 0) ? 'Fotos enviadas por correo' : '',
@@ -550,6 +557,7 @@ async function saveToAirtableMedico(row) {
 
   console.log('[AIRTABLE] Guardando en CRM MEDICO — folio:', sv(row.folio),
     '| campos:', Object.keys(fields).join(', '));
+  console.log('PLAN ENVIADO:', JSON.stringify(cleanPlan));
 
   try {
     const existingId = await _findAirtableRecord(AIRTABLE_TABLE_MEDICO, sv(row.folio));
