@@ -419,7 +419,6 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
     'Peso':         sv(pa.weight || pa.peso),
     'Sexo':         sv(row.sexo  || pa.sexo || pa.sex),
     'Plan':         sv(row.plan),
-    'Estado pago':  sv(row.payment_status || 'pendiente'),
     'Estado medico':'Pendiente revision',
     'Fotos':        (row.files && row.files.length > 0) ? 'Fotos enviadas por correo' : 'Sin fotos',
     'PDF':          'PDF enviado por correo',
