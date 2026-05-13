@@ -313,7 +313,6 @@ const MAIL_FROM = 'DERMATIKA <no-reply@dermatika.mx>';
 const AIRTABLE_API_KEY      = process.env.AIRTABLE_API_KEY      || '';
 const AIRTABLE_BASE_ID      = process.env.AIRTABLE_BASE_ID      || '';
 const AIRTABLE_TABLE_ADMIN  = process.env.AIRTABLE_TABLE_ADMIN  || process.env.AIRTABLE_TABLE || 'CRM ADMIN';
-const AIRTABLE_TABLE_MEDICO = process.env.AIRTABLE_TABLE_MEDICO || 'CRM MEDICO';
 const AIRTABLE_FIELD_CIUDAD = 'Ciudad';
 
 // Helper interno para llamadas a la API de Airtable
@@ -392,109 +391,48 @@ function calcularEdad(birthdate) {
   } catch(e) { return ''; }
 }
 
-// ── GUARDAR EN CRM ADMIN (ventas/admin) ──────────────────────────
+// ── GUARDAR EN CRM ADMIN — campos minimalistas ───────────────────
 async function saveToAirtableAdmin(row, paymentIntentId) {
   if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) {
     console.warn('[AIRTABLE] Variables no configuradas — omitiendo');
     return false;
   }
 
-  const pa = row.answers  || {};
-  const pt = row.shipping || {};
+  const pa = row.answers || {};
   const sv = (v, fb = '') => {
     if (v === null || v === undefined) return fb;
     const str = String(v).trim();
     return (str === '' || str === 'undefined' || str === 'null') ? fb : str;
   };
-  const av = v => Array.isArray(v) ? v.filter(Boolean).join(', ') : sv(v);
 
-  const edadReal = normalizeAge(row.age || row.edad || pa.age || pa.edad) ||
-    calcularEdad(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate);
-  const precioNum = Number(row.price || pa.selectedPrice || 0) || 0;
-  const pesoKg = normalizeWeightKg(row.weight || row.peso || pa.weight || pa.peso || pa.pesoKg);
-  const cleanPlan = String(row.plan || '')
-    .trim()
-    .replace(/\s+/g, ' ');
+  const edadReal = calcularEdad(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate);
+  const precioNum = Number(row.price || pa.selectedPrice || 0) || undefined;
 
+  // Solo 14 campos exactos — todos como texto excepto Edad y Precio
   const fields = {
-    // ── Identificación ─────────────────────────────────────────
-    'Folio':      sv(row.folio),
-    'Fecha':      new Date().toISOString().split('T')[0],
-    'Nombre':     (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.nombre),
-    'Telefono':   sv(row.whatsapp || pa.whatsapp || pa.phone),
-    'Email':      sv(row.correo   || pa.correo   || pa.email),
-    'Edad':       edadReal ? Number(edadReal) : undefined,
-    'Peso':       pesoKg ? Number(pesoKg) : undefined,
-    'Sexo':       sv(row.sexo || pa.sexo || pa.sex),
-    'Tipo piel':  sv(pa.skinType || pa.tipoPiel),
-    [AIRTABLE_FIELD_CIUDAD]: sv(pa.cityState || pt.shipCity || pt.shipState || pa.shipState),
-    'Estado dir': sv(pt.shipState || pa.shipState),
-    // ── Plan y pago ────────────────────────────────────────────
-    'Plan':           cleanPlan,
-    'Medicamento':    sv(row.medication),
-    'Precio':         precioNum || undefined,
-    'Estado pago':    sv(row.payment_status || 'pendiente'),
-    'Ref Stripe':     sv(row.payment_reference || paymentIntentId),
-    // ── Información del acné ───────────────────────────────────
-    'Acne severidad':           sv(pa.acneSeverity || pa.acne),
-    'Tiempo con acne':          sv(pa.duration || pa.tiempo),
-    'Zonas afectadas':          av(pa.acneAreas || pa.zonas),
-    'Tipo de lesiones':         av(pa.acneType),
-    'Dolor':                    sv(pa.acnePain),
-    'Impacto emocional':        sv(pa.acnePsychological),
-    'Ha empeorado':             sv(pa.acneWorsening),
-    'Factores':                 av(pa.acneTriggers),
-    // ── Historial de tratamientos ──────────────────────────────
-    'Tratamientos previos':     av(pa.previousTreatments),
-    'Respuesta tratamientos':   sv(pa.treatmentResponse),
-    'Antibioticos 3 meses':     sv(pa.antibioticDuration),
-    'Isotretinaina previa':     sv(pa.isotretinoinBefore),
-    'Efectos adversos':         av(pa.isotretinoinSideEffects),
-    // ── Salud general ──────────────────────────────────────────
-    'Salud general':            sv(pa.generalHealth),
-    'Condiciones cronicas':     av(pa.chronicConditions),
-    'Medicamentos actuales':    sv(pa.currentMedications),
-    'Detalle medicamentos':     sv(pa.currentMedicationsDetail),
-    'Vitamina A Retinol':       sv(pa.vitaminA),
-    'Tetraciclinas activas':    sv(pa.tetracyclines),
-    // ── Contraindicaciones ─────────────────────────────────────
-    'Enfermedad hepatica':      sv(pa.liverCondition),
-    'Colesterol Trigliceridos': sv(pa.lipidProfile),
-    'Enfermedad renal':         sv(pa.kidneyCondition),
-    'Alergias':                 sv(pa.allergies),
-    'Detalle alergias':         sv(pa.allergiesDetail),
-    'Cirugia reciente':         sv(pa.recentSurgery),
-    'Donador sangre':           sv(pa.bloodDonation),
-    // ── Salud mental ───────────────────────────────────────────
-    'Salud mental':             av(pa.mentalHealth),
-    'Ideas suicidas':           sv(pa.suicidalIdeation),
-    'Medicamentos psiquiatricos': sv(pa.mentalHealthMeds),
-    // ── Embarazo y anticoncepción ──────────────────────────────
-    'Embarazo lactancia':       sv(pa.pregnancyStatus || pa.breastfeeding),
-    'Anticoncepcion':           sv(pa.contraception),
-    // ── Hábitos ────────────────────────────────────────────────
-    'Alcohol':                  sv(pa.alcoholConsumption),
-    'Exposicion solar':         sv(pa.sunExposure),
-    'Lentes contacto':          sv(pa.contactLenses),
-    // ── Dirección ──────────────────────────────────────────────
-    'Direccion':    sv(pt.shipAddress1 || pa.shipAddress1),
-    'Colonia':      sv(pt.shipNeighborhood || pa.shipNeighborhood),
-    'CP':           sv(pt.shipZip || pa.shipZip),
-    'Municipio':    sv(pt.shipMunicipality || pa.shipMunicipality),
-    // ── Adjuntos ───────────────────────────────────────────────
-    'Fotos': (row.files && row.files.length > 0) ? 'Fotos enviadas por correo' : '',
-    'PDF':   'PDF enviado por correo',
+    'Folio':        sv(row.folio),
+    'Fecha':        new Date().toISOString().split('T')[0],
+    'Nombre':       (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.nombre),
+    'Telefono':     sv(row.whatsapp || pa.whatsapp || pa.phone),
+    'Email':        sv(row.correo   || pa.correo   || pa.email),
+    'Edad':         edadReal ? Number(edadReal) : undefined,
+    'Peso':         sv(pa.weight || pa.peso),
+    'Sexo':         sv(row.sexo  || pa.sexo || pa.sex),
+    'Plan':         sv(row.plan),
+    'Estado pago':  sv(row.payment_status || 'pendiente'),
+    'Estado medico':'Pendiente revision',
+    'Fotos':        (row.files && row.files.length > 0) ? 'Fotos enviadas por correo' : 'Sin fotos',
+    'PDF':          'PDF enviado por correo',
   };
 
-  // Eliminar undefined y strings vacíos
+  // Eliminar vacíos y undefined
   Object.keys(fields).forEach(k => {
     const v = fields[k];
     if (v === undefined || v === null || v === '') delete fields[k];
   });
 
   console.log('[AIRTABLE] Guardando en CRM ADMIN — folio:', sv(row.folio),
-    '| campos:', Object.keys(fields).length);
-  console.log('PLAN ENVIADO:', JSON.stringify(cleanPlan));
+    '| campos:', Object.keys(fields).join(', '));
 
   try {
     const existingId = await _findAirtableRecord(AIRTABLE_TABLE_ADMIN, sv(row.folio));
@@ -509,79 +447,13 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
       return false;
     }
     const rid = result.data.id || existingId;
-    console.log('[AIRTABLE ADMIN OK] record:', rid, '| campos guardados:', Object.keys(fields).length);
+    console.log('[AIRTABLE ADMIN OK] record:', rid, '| folio:', sv(row.folio));
     return rid;
   } catch (err) {
     console.error('[AIRTABLE ERROR] Excepcion en CRM ADMIN:', err.message || String(err));
     return false;
   }
 }
-
-// ── GUARDAR EN CRM MEDICO (doctor) — solo campos esenciales ─────
-async function saveToAirtableMedico(row) {
-  if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) return false;
-
-  const pa = row.answers || {};
-  const sv = (v, fb = '') => {
-    if (v === null || v === undefined) return fb;
-    const str = String(v).trim();
-    return (str === '' || str === 'undefined' || str === 'null') ? fb : str;
-  };
-
-  const edadReal = normalizeAge(row.age || row.edad || pa.age || pa.edad) ||
-    calcularEdad(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate);
-  const pesoKg = normalizeWeightKg(row.weight || row.peso || pa.weight || pa.peso || pa.pesoKg);
-  const cleanPlan = String(row.plan || '')
-    .trim()
-    .replace(/\s+/g, ' ');
-
-  // SOLO estos campos — el cuestionario completo queda en el PDF
-  const fields = {
-    'Folio':          sv(row.folio),
-    'Fecha':          new Date().toISOString().split('T')[0],
-    'Nombre':         (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.nombre),
-    'Edad':           edadReal || undefined,
-    'Peso':           pesoKg ? Number(pesoKg) : undefined,
-    'Sexo':           sv(row.sexo || pa.sexo || pa.sex),
-    'Tipo piel':      sv(pa.skinType || pa.tipoPiel),
-    'Plan':           cleanPlan,
-    'Medicamento':    sv(row.medication),
-    'Acne severidad': sv(pa.acneSeverity || pa.acne),
-    'Fotos':          (row.files && row.files.length > 0) ? 'Fotos enviadas por correo' : '',
-    'PDF':            'PDF enviado por correo',
-    'Estado medico':  'Pendiente revision',
-  };
-
-  // Eliminar campos vacíos
-  Object.keys(fields).forEach(k => { if (!fields[k]) delete fields[k]; });
-
-  console.log('[AIRTABLE] Guardando en CRM MEDICO — folio:', sv(row.folio),
-    '| campos:', Object.keys(fields).join(', '));
-  console.log('PLAN ENVIADO:', JSON.stringify(cleanPlan));
-
-  try {
-    const existingId = await _findAirtableRecord(AIRTABLE_TABLE_MEDICO, sv(row.folio));
-    let result;
-    if (existingId) {
-      result = await _airtableRequest('PATCH', AIRTABLE_TABLE_MEDICO, existingId, { fields });
-    } else {
-      result = await _airtableRequest('POST', AIRTABLE_TABLE_MEDICO, null, { fields });
-    }
-    if (!result.ok) {
-      const errMsg = result.data?.error?.message || result.data?.error?.type || JSON.stringify(result.data?.error || result.data);
-      console.error('[AIRTABLE ERROR]', result.status, errMsg);
-      console.error('[AIRTABLE ERROR] Campos enviados:', Object.keys(fields).join(', '));
-      return false;
-    }
-    const rid = result.data.id || existingId;
-    console.log('[AIRTABLE MEDICO OK] record:', rid, '| folio:', sv(row.folio));
-    return rid;
-  } catch (err) {
-    console.error('[AIRTABLE ERROR] Excepcion en CRM MEDICO:', err.message || String(err));
-    return false;
-  }
-}
-
 // Alias para compatibilidad con el código existente
 const saveToAirtable = (row, piId) => saveToAirtableAdmin(row, piId);
 
@@ -594,7 +466,6 @@ console.log('[CONFIG] FRONTEND_ORIGIN:', process.env.FRONTEND_ORIGIN || '❌ FAL
 console.log('[CONFIG] AIRTABLE_API_KEY:', AIRTABLE_API_KEY ? '✅ configurada' : '❌ FALTA');
 console.log('[CONFIG] AIRTABLE_BASE_ID:', AIRTABLE_BASE_ID || '❌ FALTA');
 console.log('[CONFIG] AIRTABLE_TABLE_ADMIN:', AIRTABLE_TABLE_ADMIN);
-console.log('[CONFIG] AIRTABLE_TABLE_MEDICO:', AIRTABLE_TABLE_MEDICO);
 
 async function sendInternalMail(subject, text, attachments = [], htmlContent = null) {
   if (!RESEND_API_KEY || !ADMIN_EMAIL) {
@@ -1783,7 +1654,9 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
     const edadFromFE = normalizeAge(patientData.age || patientData.edad || answersData.age || answersData.edad || body.age || body.edad || '');
     const pesoFromFE = normalizeWeightKg(patientData.weight || patientData.peso || answersData.weight || answersData.peso || answersData.pesoKg || body.weight || body.peso || body.pesoKg || '');
 
-    console.log('[CONFIRM] folio:', folio, '| pi:', paymentIntentId, '| plan:', planFromFE);
+    console.log('[CONFIRM] folio:', folio, '| pi:', paymentIntentId);
+    console.log('[PLAN] seleccionado:', planFromFE || '(vacío)');
+    console.log('[PRECIO] seleccionado:', priceFromFE || '(vacío)');
     console.log('[CONFIRM] patient:', patientData.nombre||'(vacío)', patientData.apellido||'', '| edad:', edadFromFE || '(vacío)', '| peso:', pesoFromFE || '(vacío)');
     console.log('[CONFIRM] answers keys:', Object.keys(answersData).length, '| shipping:', !!shippingData.shipAddress1, '| fotos base64:', photosBase64.length);
     console.log('[CONFIRM] plan final:', planLabelFromFE || planFromFE || '(sin plan)', '| key:', planKeyFromFE || '(sin key)', '| precio:', priceFromFE || 0);
@@ -1869,6 +1742,9 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
 
     // ✅ CORREO MÉDICO COMPLETO CON PDF + FOTOS — solo si el pago fue exitoso
     if (paid && updatedRow && !updatedRow.mail_sent_payment) {
+      const planFinal = updatedRow.plan || planFromFE || 'N/A';
+      const precioFinal = updatedRow.price || priceFromFE || 0;
+      console.log('[CONFIRM] plan final:', planFinal, '| precio final:', precioFinal, '| folio:', folio);
       console.log('[CONFIRM] Pago exitoso — enviando correo completo con PDF y fotos. Folio:', folio);
       try {
         await sendPaymentConfirmedEmail(updatedRow, paymentIntentId);
@@ -1889,11 +1765,6 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
       } catch(atErr) {
         console.error('[AIRTABLE ERROR] Error en CRM ADMIN:', atErr.message);
       }
-      try {
-        await saveToAirtableMedico(updatedRow);
-      } catch(atErr) {
-        console.error('[AIRTABLE ERROR] Error en CRM MEDICO:', atErr.message);
-      }
     } else if (!paid) {
       console.log('[CONFIRM] Pago NO exitoso — status:', pi?.status, '— NO se envía correo');
     } else {
@@ -1901,7 +1772,6 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
       // Intentar Airtable igual (puede que no se haya guardado la primera vez)
       if (updatedRow) {
         try { await saveToAirtableAdmin(updatedRow, paymentIntentId); } catch(e) {}
-        try { await saveToAirtableMedico(updatedRow); } catch(e) {}
       }
     }
 
@@ -1994,139 +1864,6 @@ app.post('/api/stripe-webhook',
 );
 
 // ══════════════════════════════════════════════════════════════════
-// /api/medical-update — El médico actualiza receta, dosis e indicaciones
-// Campos actualizados en CRM MEDICO de Airtable
-// ══════════════════════════════════════════════════════════════════
-app.post('/api/medical-update', async (req, res) => {
-  try {
-    const body   = req.body || {};
-    const folio  = sanitizeText(body.folio || '', 40);
-    const apiKey = sanitizeText(body.api_key || '', 100); // clave médico para autenticar
-
-    if (!folio) return res.status(400).json({ ok: false, error: 'folio_requerido' });
-
-    // Validar clave del médico
-    const MEDICAL_API_KEY = process.env.MEDICAL_API_KEY || '';
-    if (MEDICAL_API_KEY && apiKey !== MEDICAL_API_KEY) {
-      return res.status(401).json({ ok: false, error: 'no_autorizado' });
-    }
-
-    if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) {
-      return res.status(503).json({ ok: false, error: 'airtable_no_configurado' });
-    }
-
-    // Buscar el record en CRM MEDICO
-    const recordId = await _findAirtableRecord(AIRTABLE_TABLE_MEDICO, folio);
-    if (!recordId) {
-      return res.status(404).json({ ok: false, error: 'paciente_no_encontrado', folio });
-    }
-
-    // Campos que el médico puede actualizar
-    const fields = {};
-    if (body.receta_medica        ) fields['Receta medica']          = sanitizeText(body.receta_medica, 2000);
-    if (body.dosis_indicada       ) fields['Dosis indicada']         = sanitizeText(body.dosis_indicada, 1000);
-    if (body.indicaciones_skincare) fields['Indicaciones skincare']  = sanitizeText(body.indicaciones_skincare, 2000);
-    if (body.estado_medico        ) fields['Estado medico']          = sanitizeText(body.estado_medico, 100);
-    if (body.comentarios_medico   ) fields['Comentarios del medico'] = sanitizeText(body.comentarios_medico, 2000);
-
-    if (Object.keys(fields).length === 0) {
-      return res.status(400).json({ ok: false, error: 'sin_campos_para_actualizar' });
-    }
-
-    console.log('[MEDICO] Actualizando expediente — folio:', folio, '| campos:', Object.keys(fields).join(', '));
-
-    const result = await _airtableRequest('PATCH', AIRTABLE_TABLE_MEDICO, recordId, { fields });
-
-    if (!result.ok) {
-      const errMsg = result.data?.error?.message || JSON.stringify(result.data?.error || result.data);
-      console.error('[MEDICO ERROR]', result.status, errMsg);
-      return res.status(500).json({ ok: false, error: 'error_airtable', detail: errMsg });
-    }
-
-    console.log('[MEDICO] Expediente actualizado correctamente — folio:', folio, '| record:', recordId);
-
-    // También guardar en DB local
-    const db  = readDb();
-    const idx = db.findIndex(r => String(r.folio||'').toLowerCase() === folio.toLowerCase());
-    if (idx >= 0) {
-      if (!db[idx].medico) db[idx].medico = {};
-      if (body.receta_medica        ) db[idx].medico.receta_medica         = sanitizeText(body.receta_medica, 2000);
-      if (body.dosis_indicada       ) db[idx].medico.dosis_indicada        = sanitizeText(body.dosis_indicada, 1000);
-      if (body.indicaciones_skincare) db[idx].medico.indicaciones_skincare = sanitizeText(body.indicaciones_skincare, 2000);
-      if (body.estado_medico        ) db[idx].medico.estado_medico         = sanitizeText(body.estado_medico, 100);
-      if (body.comentarios_medico   ) db[idx].medico.comentarios_medico    = sanitizeText(body.comentarios_medico, 2000);
-      db[idx].medico.updatedAt = new Date().toISOString();
-      writeDb(db);
-    }
-
-    return res.json({ ok: true, folio, record_id: recordId, updated: Object.keys(fields) });
-  } catch (err) {
-    console.error('[MEDICO ERROR] Excepcion:', err.message || err);
-    return res.status(500).json({ ok: false, error: 'server_error' });
-  }
-});
-
-// /api/medical-get — El médico consulta el expediente de un paciente
-app.get('/api/medical-get', async (req, res) => {
-  try {
-    const folio  = sanitizeText(req.query.folio  || '', 40);
-    const apiKey = sanitizeText(req.query.api_key || '', 100);
-    if (!folio) return res.status(400).json({ ok: false, error: 'folio_requerido' });
-
-    const MEDICAL_API_KEY = process.env.MEDICAL_API_KEY || '';
-    if (MEDICAL_API_KEY && apiKey !== MEDICAL_API_KEY) {
-      return res.status(401).json({ ok: false, error: 'no_autorizado' });
-    }
-
-    // Leer de DB local
-    const db  = readDb();
-    const row = db.find(r => String(r.folio||'').toLowerCase() === folio.toLowerCase());
-    if (!row) return res.status(404).json({ ok: false, error: 'paciente_no_encontrado' });
-
-    const pa = row.answers || {};
-    const av = v => Array.isArray(v) ? v.join(', ') : (v || 'N/A');
-
-    // Solo datos médicos — SIN teléfono ni email
-    return res.json({
-      ok: true,
-      expediente: {
-        folio:          row.folio,
-        nombre:         `${row.nombre||''} ${row.apellido||''}`.trim(),
-        edad:           normalizeAge(row.age || row.edad || pa.age || pa.edad) || 'N/A',
-        peso:           normalizeWeightKg(row.weight || row.peso || pa.weight || pa.peso || pa.pesoKg) || 'N/A',
-        sexo:           row.sexo || pa.sex || pa.sexo || 'N/A',
-        acne_severidad: pa.acneSeverity || pa.acne || 'N/A',
-        acne_duracion:  pa.duration || pa.tiempo || 'N/A',
-        acne_zonas:     av(pa.acneAreas || pa.zonas),
-        acne_tipo:      av(pa.acneType),
-        tratamientos_previos: av(pa.previousTreatments),
-        isotretinoin_previa:  pa.isotretinoinBefore || 'N/A',
-        salud_general:        pa.generalHealth || 'N/A',
-        condiciones_cronicas: av(pa.chronicConditions),
-        medicamentos_actuales: pa.currentMedications || 'N/A',
-        alergias:             pa.allergies || 'N/A',
-        salud_mental:         av(pa.mentalHealth),
-        ideas_suicidas:       pa.suicidalIdeation || 'N/A',
-        plan:           row.plan || 'N/A',
-        medicamento:    row.medication || 'N/A',
-        estado_pago:    row.payment_status || 'N/A',
-        fecha:          row.createdAt || 'N/A',
-        fotos_count:    (row.files || []).length,
-        // Datos del médico
-        medico: row.medico || {
-          receta_medica: '',
-          dosis_indicada: '',
-          indicaciones_skincare: '',
-          estado_medico: 'Pendiente revision',
-          comentarios_medico: ''
-        }
-      }
-    });
-  } catch (err) {
-    console.error('[MEDICO GET ERROR]', err.message);
-    return res.status(500).json({ ok: false, error: 'server_error' });
-  }
-});
 
 // ✅ Config pública (solo public key — nunca secret key)
 app.get('/api/config', (_req, res) => {
