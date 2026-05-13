@@ -41,8 +41,8 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use(express.json({ limit: '18mb' }));
+app.use(express.urlencoded({ limit: '18mb', extended: true }));
 
 // ✅ Rate limit funcional con trust proxy ya configurado
 const apiLimiter = rateLimit({
