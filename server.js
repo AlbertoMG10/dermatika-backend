@@ -24,15 +24,17 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "https://js.stripe.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://js.stripe.com", "https://connect.facebook.net"],
       frameSrc: ["https://js.stripe.com", "https://hooks.stripe.com"],
       connectSrc: [
         "'self'",
         "https://api.stripe.com",
+        "https://www.facebook.com",
+        "https://connect.facebook.net",
         process.env.NETLIFY_ORIGIN || '',
         process.env.NETLIFY_PREVIEW_ORIGIN || ''
       ].filter(Boolean),
-      imgSrc: ["'self'", "data:"],
+      imgSrc: ["'self'", "data:", "https://www.facebook.com"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       frameAncestors: ["'none'"]
