@@ -1592,7 +1592,9 @@ async function createPaymentIntentHandler(req, res) {
       ok: true,
       folio,
       clientSecret: paymentIntent.client_secret,
+      client_secret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
+      payment_intent: paymentIntent.id,
       publishableKey: stripePublic
     });
   } catch (err) {
