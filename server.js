@@ -1606,6 +1606,63 @@ async function createPaymentIntentHandler(req, res) {
 app.post('/api/create-stripe-payment-intent', createPaymentIntentHandler);
 app.post('/api/create-payment-intent', createPaymentIntentHandler);
 
+app.post('/api/create-live-validation-payment-intent', async (req, res) => {
+  try {
+    if (!stripe || !stripeKeysAreLive) {
+      console.error('[STRIPE VALIDATION] ❌ Stripe LIVE no configurado');
+      return res.status(503).json({ ok: false, error: 'stripe_live_keys_required' });
+    }
+    const token = sanitizeText(req.body?.validation_token || req.query?.token || '', 120);
+    const expectedToken = process.env.STRIPE_LIVE_VALIDATION_TOKEN || 'dermatika-live-10mxn-8f4c2';
+    if (token !== expectedToken) {
+      return res.status(404).json({ ok: false, error: 'not_found' });
+    }
+
+    const folio = getOrCreateFolio(req.body?.folio || req.body?.patientReference || '');
+    const email = sanitizeText(req.body?.email || process.env.VALIDATION_EMAIL || '', 120);
+    const phone = normalizePhone(req.body?.phone || '');
+    const patientName = sanitizeText(req.body?.patientName || 'Validacion LIVE Stripe', 120);
+    const expectedPlan = PLAN_PRICE_MAP.esencial;
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: 1000,
+      currency: 'mxn',
+      automatic_payment_methods: { enabled: true },
+      metadata: {
+        validation_flow: 'live_10mxn',
+        folio,
+        patient_reference: folio,
+        nombre: patientName,
+        correo: email,
+        whatsapp: phone,
+        plan: 'esencial',
+        plan_key: 'esencial',
+        planLabel: expectedPlan.planLabel,
+        plan_name: expectedPlan.plan,
+        medicamento: expectedPlan.medication,
+        precio: '10',
+        source: 'stripe_live_validation_10mxn'
+      },
+      receipt_email: email || undefined
+    });
+
+    console.log('[STRIPE VALIDATION] PaymentIntent LIVE $10 MXN creado:', paymentIntent.id, '| folio:', folio);
+    return res.json({
+      ok: true,
+      validation: true,
+      folio,
+      clientSecret: paymentIntent.client_secret,
+      client_secret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+      payment_intent: paymentIntent.id,
+      publishableKey: stripePublic
+    });
+  } catch (err) {
+    console.error('[STRIPE VALIDATION] ❌ Error:', err.message || err);
+    return res.status(500).json({ ok: false, error: 'stripe_validation_error' });
+  }
+});
+
 // Confirmar payment intent
 app.post('/api/confirm-payment-intent', async (req, res) => {
   try {
@@ -1645,11 +1702,12 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
     const paid = pi?.status === 'succeeded' && pi?.livemode === true;
     const finalPlan = resolvePlanSelection(body, answersData, pi?.metadata || {});
+    const isLiveValidation = pi?.metadata?.validation_flow === 'live_10mxn';
     const planFromFE  = finalPlan.plan;
     const planLabelFromFE = finalPlan.planLabel;
     const planKeyFromFE = finalPlan.planKey;
     const medFromFE   = finalPlan.medication;
-    const priceFromFE = finalPlan.price;
+    const priceFromFE = isLiveValidation ? 10 : finalPlan.price;
     const edadFromFE = normalizeAge(patientData.age || patientData.edad || answersData.age || answersData.edad || body.age || body.edad || '');
     const pesoFromFE = normalizeWeightKg(patientData.weight || patientData.peso || answersData.weight || answersData.peso || answersData.pesoKg || body.weight || body.peso || body.pesoKg || '');
 
@@ -1680,6 +1738,7 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
       if (planKeyFromFE) db[idx].plan_key = planKeyFromFE;
       if (medFromFE   ) db[idx].medication = medFromFE;
       if (priceFromFE ) db[idx].price      = priceFromFE;
+      if (isLiveValidation) db[idx].validation_flow = 'live_10mxn';
       // Enriquecer con datos del paciente si el registro los tenía vacíos
       if (patientData.nombre   && !db[idx].nombre  ) db[idx].nombre   = sanitizeText(patientData.nombre, 120);
       if (patientData.apellido && !db[idx].apellido) db[idx].apellido = sanitizeText(patientData.apellido, 120);
@@ -1733,6 +1792,7 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
         peso: pesoFromFE || null,
         plan: planFromFE, planLabel: planLabelFromFE, plan_key: planKeyFromFE,
         medication: medFromFE, price: priceFromFE,
+        validation_flow: isLiveValidation ? 'live_10mxn' : undefined,
         answers: answersData, shipping: shippingData,
         files: photosBase64.map((p,i)=>({field:`photo_${i+1}`,name:p.name||`foto-${i+1}.jpg`,type:p.type||'image/jpeg',data:p.data||null})).filter(f=>f.data),
         payment_reference: paymentIntentId, payment_status: paid ? 'paid' : 'unknown',
@@ -1863,13 +1923,15 @@ app.post('/api/stripe-webhook',
         db[idx].status = STATES.PAGADO;
         db[idx].updatedAt = new Date().toISOString();
         const finalPlan = resolvePlanSelection(stripeObject.metadata || {}, db[idx].answers || {}, db[idx]);
+        const isLiveValidation = stripeObject.metadata?.validation_flow === 'live_10mxn';
         if (finalPlan.planKey) {
           db[idx].plan = finalPlan.plan;
           db[idx].planLabel = finalPlan.planLabel;
           db[idx].plan_key = finalPlan.planKey;
           db[idx].medication = finalPlan.medication;
-          db[idx].price = finalPlan.price;
-          console.log('[CONFIRM] plan final:', finalPlan.planLabel, '| key:', finalPlan.planKey, '| precio:', finalPlan.price);
+          db[idx].price = isLiveValidation ? 10 : finalPlan.price;
+          if (isLiveValidation) db[idx].validation_flow = 'live_10mxn';
+          console.log('[CONFIRM] plan final:', finalPlan.planLabel, '| key:', finalPlan.planKey, '| precio:', db[idx].price);
         }
         const updatedRow = db[idx];
         writeDb(db);
