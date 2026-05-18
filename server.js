@@ -45,7 +45,12 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 
-app.use(express.json({ limit: '18mb' }));
+app.use(express.json({
+  limit: '18mb',
+  verify: (req, _res, buf) => {
+    if (req.originalUrl === '/api/stripe-webhook') req.rawBody = buf;
+  }
+}));
 app.use(express.urlencoded({ limit: '18mb', extended: true }));
 
 // ✅ Rate limit funcional con trust proxy ya configurado
@@ -299,7 +304,11 @@ function resolvePlanSelection(...sources) {
 // ✅ Stripe: solo si están configuradas las keys
 const stripeSecret = process.env.STRIPE_SECRET_KEY || '';
 const stripePublic = process.env.STRIPE_PUBLIC_KEY || '';
-const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: '2024-04-10' }) : null;
+const stripeKeysAreLive = stripeSecret.startsWith('sk_live_') && stripePublic.startsWith('pk_live_') && !stripeSecret.includes('REEMPLAZAR') && !stripePublic.includes('REEMPLAZAR');
+if ((stripeSecret && !stripeSecret.startsWith('sk_live_')) || (stripePublic && !stripePublic.startsWith('pk_live_'))) {
+  console.error('[STRIPE] ❌ PRODUCCIÓN requiere llaves LIVE. Revisa STRIPE_SECRET_KEY=sk_live_... y STRIPE_PUBLIC_KEY=pk_live_...');
+}
+const stripe = stripeKeysAreLive ? new Stripe(stripeSecret, { apiVersion: '2024-04-10' }) : null;
 
 // ✅ Resend API — usa RESEND_API_KEY y ADMIN_EMAIL ya configurados en Render
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
@@ -460,8 +469,8 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
 const saveToAirtable = (row, piId) => saveToAirtableAdmin(row, piId);
 
 // ── Log de arranque: verificar variables críticas ──
-console.log('[CONFIG] STRIPE_SECRET_KEY:', stripeSecret ? '✅ configurada' : '❌ FALTA');
-console.log('[CONFIG] STRIPE_PUBLIC_KEY:', stripePublic ? '✅ configurada' : '❌ FALTA');
+console.log('[CONFIG] STRIPE_SECRET_KEY:', stripeSecret ? (stripeSecret.startsWith('sk_live_') ? '✅ live' : '❌ NO LIVE') : '❌ FALTA');
+console.log('[CONFIG] STRIPE_PUBLIC_KEY:', stripePublic ? (stripePublic.startsWith('pk_live_') ? '✅ live' : '❌ NO LIVE') : '❌ FALTA');
 console.log('[CONFIG] RESEND_API_KEY:', RESEND_API_KEY ? '✅ configurada' : '❌ FALTA');
 console.log('[CONFIG] ADMIN_EMAIL:', ADMIN_EMAIL || '❌ FALTA');
 console.log('[CONFIG] FRONTEND_ORIGIN:', process.env.FRONTEND_ORIGIN || '❌ FALTA');
@@ -1342,9 +1351,8 @@ app.post('/api/intake', upload.any(), async (req, res) => {
   const body = req.body || {};
   const nowIso = new Date().toISOString();
   const paymentStatus = normalizeText(body.payment_status || '');
-  const status = paymentStatus.includes('succeeded') || paymentStatus.includes('paid')
-    ? STATES.PAGADO
-    : STATES.CHECKOUT_PENDIENTE;
+  const unverifiedPaidStatus = paymentStatus.includes('succeeded') || paymentStatus.includes('paid');
+  const status = STATES.CHECKOUT_PENDIENTE;
   const folio = getOrCreateFolio(body.folio_dermatika || body.internal_folio || body.patient_reference);
   let plan = sanitizeText(body.planLabel || body.plan_label || body.plan_name || body.plan || '', 80) || null;
   let planLabel = sanitizeText(body.planLabel || body.plan_label || body.plan_name || body.plan || '', 80) || null;
@@ -1506,7 +1514,7 @@ app.post('/api/intake', upload.any(), async (req, res) => {
     folio,
     shipping: shippingData,
     payment_reference: sanitizeText(body.payment_reference || body.payment_intent_id || pa.payment_reference || '', 120) || null,
-    payment_status: sanitizeText(body.payment_status || 'pending', 80),
+    payment_status: unverifiedPaidStatus ? 'pending_unverified' : sanitizeText(body.payment_status || 'pending', 80),
     // Guardar answers completo — el PDF/email usa a() que busca aquí
     answers: parsedAnswers,
     files: fileSummaries,
@@ -1518,20 +1526,7 @@ app.post('/api/intake', upload.any(), async (req, res) => {
   db.push(payload);
   writeDb(db);
 
-  // ✅ Solo enviar correo si el pago viene confirmado desde el frontend
-  // En la mayoría de los casos llega como "pending" — el correo real lo envía confirm-payment-intent o webhook
-  if (status === STATES.PAGADO) {
-    console.log('[INTAKE] Pago confirmado en intake — enviando correo con PDF + fotos');
-    await sendPaymentConfirmedEmail(payload, body.payment_reference || body.payment_intent_id || '');
-    payload.mail_sent_payment = true;
-    payload.mail_sent_at = new Date().toISOString();
-    // Actualizar registro en DB con flag de correo enviado
-    const dbU = readDb();
-    const idxU = dbU.findIndex(r => r.folio === folio);
-    if (idxU >= 0) { dbU[idxU] = { ...dbU[idxU], ...payload }; writeDb(dbU); }
-  } else {
-    console.log('[INTAKE] Evaluación guardada como PENDIENTE — correo se enviará tras confirmar pago. Folio:', folio);
-  }
+  console.log('[INTAKE] Evaluación guardada como PENDIENTE — correo/PDF/CRM solo tras Stripe paid. Folio:', folio);
 
   return res.json({ ok: true, folio, status, recommendedPlan: plan || null });
 });
@@ -1539,9 +1534,9 @@ app.post('/api/intake', upload.any(), async (req, res) => {
 // ✅ Crear Payment Intent con Stripe
 async function createPaymentIntentHandler(req, res) {
   try {
-    if (!stripe || !stripePublic) {
-      console.error('[STRIPE] ❌ Stripe no configurado — faltan keys');
-      return res.status(503).json({ ok: false, error: 'stripe_not_configured' });
+    if (!stripe || !stripePublic || !stripeKeysAreLive) {
+      console.error('[STRIPE] ❌ Stripe LIVE no configurado — no se crea PaymentIntent');
+      return res.status(503).json({ ok: false, error: 'stripe_live_keys_required' });
     }
     const requestedPlan = resolvePlanSelection(req.body || {});
     const planKey = requestedPlan.planKey;
@@ -1612,7 +1607,7 @@ app.post('/api/create-payment-intent', createPaymentIntentHandler);
 // Confirmar payment intent
 app.post('/api/confirm-payment-intent', async (req, res) => {
   try {
-    if (!stripe) return res.status(503).json({ ok: false, error: 'stripe_not_configured' });
+    if (!stripe || !stripeKeysAreLive) return res.status(503).json({ ok: false, error: 'stripe_live_keys_required' });
     const body = req.body || {};
     const paymentIntentId = sanitizeText(body.payment_intent || body.payment_reference || body.paymentIntentId || '', 120);
     const folio = getOrCreateFolio(body.folio || '');
@@ -1646,7 +1641,7 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
     if (!paymentIntentId) return res.status(400).json({ ok: false, error: 'missing_payment_intent_id' });
 
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
-    const paid = pi?.status === 'succeeded';
+    const paid = pi?.status === 'succeeded' && pi?.livemode === true;
     const finalPlan = resolvePlanSelection(body, answersData, pi?.metadata || {});
     const planFromFE  = finalPlan.plan;
     const planLabelFromFE = finalPlan.planLabel;
@@ -1668,9 +1663,14 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
     let updatedRow = null;
 
     if (idx >= 0) {
-      db[idx].payment_reference = paymentIntentId;
-      db[idx].payment_status = paid ? 'succeeded' : String(pi?.status || 'unknown');
-      db[idx].status = paid ? STATES.PAGADO : db[idx].status;
+      if (paid) {
+        db[idx].payment_reference = paymentIntentId;
+        db[idx].payment_status = 'paid';
+        db[idx].status = STATES.PAGADO;
+      } else if (db[idx].payment_status !== 'paid') {
+        db[idx].payment_reference = paymentIntentId;
+        db[idx].payment_status = String(pi?.status || 'unknown');
+      }
       db[idx].updatedAt = new Date().toISOString();
       // Actualizar datos que llegaron en confirm (más completos que en el intake inicial)
       if (planFromFE  ) db[idx].plan       = planFromFE;
@@ -1733,7 +1733,7 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
         medication: medFromFE, price: priceFromFE,
         answers: answersData, shipping: shippingData,
         files: photosBase64.map((p,i)=>({field:`photo_${i+1}`,name:p.name||`foto-${i+1}.jpg`,type:p.type||'image/jpeg',data:p.data||null})).filter(f=>f.data),
-        payment_reference: paymentIntentId, payment_status: paid?'succeeded':'unknown',
+        payment_reference: paymentIntentId, payment_status: paid ? 'paid' : 'unknown',
         status: paid ? STATES.PAGADO : STATES.CHECKOUT_PENDIENTE,
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
       };
@@ -1768,16 +1768,22 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
         console.error('[AIRTABLE ERROR] Error en CRM ADMIN:', atErr.message);
       }
     } else if (!paid) {
-      console.log('[CONFIRM] Pago NO exitoso — status:', pi?.status, '— NO se envía correo');
+      console.log('[CONFIRM] Pago NO confirmado como LIVE/paid — status:', pi?.status, '| livemode:', pi?.livemode, '— NO se envía correo/PDF/CRM');
     } else {
       console.log('[CONFIRM] Correo ya enviado previamente para folio:', folio);
       // Intentar Airtable igual (puede que no se haya guardado la primera vez)
-      if (updatedRow) {
+      if (updatedRow && updatedRow.payment_status === 'paid') {
         try { await saveToAirtableAdmin(updatedRow, paymentIntentId); } catch(e) {}
       }
     }
 
-    return res.json({ ok: true, paid, status: pi?.status || 'unknown', folio });
+    return res.json({
+      ok: true,
+      paid,
+      payment_status: paid ? 'paid' : String(pi?.status || 'unknown'),
+      status: pi?.status || 'unknown',
+      folio
+    });
   } catch (err) {
     console.error('[CONFIRM] ❌ Error:', err.message || err);
     return res.status(500).json({ ok: false, error: 'confirm_failed' });
@@ -1786,22 +1792,25 @@ app.post('/api/confirm-payment-intent', async (req, res) => {
 
 // ══════════════════════════════════════════════════════════════════
 // WEBHOOK DE STRIPE — Segunda línea de defensa para confirmar pago
-// Evento: payment_intent.succeeded
+// Evento: payment_intent.succeeded / checkout.session.completed
 // ══════════════════════════════════════════════════════════════════
 app.post('/api/stripe-webhook',
   express.raw({ type: 'application/json' }),
   async (req, res) => {
+    if (!stripe || !stripeKeysAreLive) {
+      console.error('[WEBHOOK] ❌ Stripe LIVE no configurado — webhook rechazado');
+      return res.status(503).json({ ok: false, error: 'stripe_live_keys_required' });
+    }
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
     const sig = req.headers['stripe-signature'];
     let event;
 
     try {
       if (webhookSecret && sig) {
-        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+        event = stripe.webhooks.constructEvent(req.rawBody || req.body, sig, webhookSecret);
       } else {
-        // Sin secreto configurado — parsear directamente (solo para testing)
-        event = JSON.parse(req.body.toString());
-        console.warn('[WEBHOOK] ⚠️ STRIPE_WEBHOOK_SECRET no configurado — sin verificación de firma');
+        console.error('[WEBHOOK] ❌ STRIPE_WEBHOOK_SECRET requerido en producción');
+        return res.status(503).json({ ok: false, error: 'webhook_secret_required' });
       }
     } catch (err) {
       console.error('[WEBHOOK] ❌ Firma inválida:', err.message);
@@ -1810,17 +1819,34 @@ app.post('/api/stripe-webhook',
 
     console.log('[WEBHOOK] Evento recibido:', event.type);
 
-    if (event.type === 'payment_intent.succeeded') {
-      const pi = event.data.object;
-      const paymentIntentId = pi.id;
-      const folioMeta = pi.metadata?.folio || pi.metadata?.patient_reference || '';
+    if (event.type === 'payment_intent.succeeded' || event.type === 'checkout.session.completed') {
+      const stripeObject = event.data.object;
+      const isCheckoutSession = event.type === 'checkout.session.completed';
+      const rawPaymentIntent = isCheckoutSession ? stripeObject.payment_intent : stripeObject.id;
+      const paymentIntentId = sanitizeText(
+        typeof rawPaymentIntent === 'object' ? (rawPaymentIntent?.id || '') : (rawPaymentIntent || ''),
+        120
+      );
+      const folioMeta = stripeObject.metadata?.folio || stripeObject.metadata?.patient_reference ||
+        stripeObject.client_reference_id || '';
+      const webhookPaymentStatus = isCheckoutSession
+        ? String(stripeObject.payment_status || '').toLowerCase()
+        : (stripeObject.status === 'succeeded' ? 'paid' : String(stripeObject.status || '').toLowerCase());
+      const webhookPaid = webhookPaymentStatus === 'paid' && stripeObject.livemode === true;
 
-      console.log('[WEBHOOK] payment_intent.succeeded — folio meta:', folioMeta, '| pi:', paymentIntentId);
+      console.log('[WEBHOOK]', event.type, '— folio meta:', folioMeta,
+        '| pi:', paymentIntentId || '(sin pi)', '| payment_status:', webhookPaymentStatus);
+
+      if (!webhookPaid) {
+        console.log('[WEBHOOK] Pago no confirmado LIVE/paid — no se muestra success ni se envía correo/PDF/CRM. payment_status:',
+          webhookPaymentStatus, '| livemode:', stripeObject.livemode);
+        return res.json({ received: true, payment_status: webhookPaymentStatus || 'unknown' });
+      }
 
       const db = readDb();
       const idx = db.findIndex((row) =>
         String(row.folio || '').toLowerCase() === folioMeta.toLowerCase() ||
-        String(row.payment_reference || '') === paymentIntentId
+        (paymentIntentId && String(row.payment_reference || '') === paymentIntentId)
       );
 
       if (idx >= 0) {
@@ -1830,11 +1856,11 @@ app.post('/api/stripe-webhook',
           return res.json({ received: true });
         }
 
-        db[idx].payment_reference = paymentIntentId;
-        db[idx].payment_status = 'succeeded';
+        db[idx].payment_reference = paymentIntentId || db[idx].payment_reference;
+        db[idx].payment_status = 'paid';
         db[idx].status = STATES.PAGADO;
         db[idx].updatedAt = new Date().toISOString();
-        const finalPlan = resolvePlanSelection(pi.metadata || {}, db[idx].answers || {}, db[idx]);
+        const finalPlan = resolvePlanSelection(stripeObject.metadata || {}, db[idx].answers || {}, db[idx]);
         if (finalPlan.planKey) {
           db[idx].plan = finalPlan.plan;
           db[idx].planLabel = finalPlan.planLabel;
@@ -1867,11 +1893,27 @@ app.post('/api/stripe-webhook',
 
 // ══════════════════════════════════════════════════════════════════
 
+app.get('/api/payment-confirmation/:folio', (req, res) => {
+  const folio = sanitizeText(req.params.folio || '', 80);
+  if (!folio) return res.status(400).json({ ok: false, paid: false, error: 'missing_folio' });
+  const db = readDb();
+  const row = db.find((item) => String(item.folio || '').toLowerCase() === folio.toLowerCase());
+  const paid = Boolean(row && row.status === STATES.PAGADO && row.payment_status === 'paid' && row.payment_reference);
+  return res.json({
+    ok: true,
+    paid,
+    payment_status: paid ? 'paid' : (row?.payment_status || 'unknown'),
+    status: row?.status || 'unknown',
+    folio
+  });
+});
+
 // ✅ Config pública (solo public key — nunca secret key)
 app.get('/api/config', (_req, res) => {
   res.json({
     ok: true,
-    publicKey: stripePublic || '',
+    stripeMode: stripeKeysAreLive ? 'live' : 'invalid',
+    publicKey: stripeKeysAreLive ? stripePublic : '',
     paymentLinks: {
       esencial: process.env.PAYMENT_LINK_ESENCIAL || '',
       avanzado: process.env.PAYMENT_LINK_AVANZADO || '',
@@ -1918,7 +1960,8 @@ app.get('/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'dermatika-backend',
-    stripeReady: Boolean(stripe && stripePublic),
+    stripeReady: Boolean(stripe && stripePublic && stripeKeysAreLive),
+    stripeMode: stripeKeysAreLive ? 'live' : 'invalid',
     timestamp: new Date().toISOString()
   });
 });
