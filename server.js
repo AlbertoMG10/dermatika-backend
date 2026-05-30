@@ -1,5 +1,5 @@
 'use strict';
-console.log("VERSION SERVER CRM FIX 12-MAYO-10:35");
+console.log("VERSION SERVER LEAD EMAIL 30-MAYO-03:00");
 
 const express  = require('express');
 const fs       = require('fs');
@@ -1526,7 +1526,60 @@ app.post('/api/intake', upload.any(), async (req, res) => {
   db.push(payload);
   writeDb(db);
 
-  console.log('[INTAKE] Evaluación guardada como PENDIENTE — correo/PDF/CRM solo tras Stripe paid. Folio:', folio);
+  console.log('[INTAKE] Evaluación guardada — enviando correo de lead a admin. Folio:', folio);
+
+  // Enviar correo de lead INMEDIATAMENTE al guardar la evaluación
+  // Llega aunque el paciente no pague — permite seguimiento por correo/WhatsApp
+  setImmediate(async () => {
+    try {
+      const pdfBuf = await generateEvaluationPDF({ ...payload, eligibility_status: 'candidato' });
+      const pdfAttachment = {
+        filename: `DERMATIKA-Lead-${folio}.pdf`,
+        content: pdfBuf.toString('base64'),
+        contentType: 'application/pdf'
+      };
+
+      const photoAttachments = getPhotoAttachments(payload);
+      const allAttachments = [pdfAttachment, ...photoAttachments];
+
+      const nombreCompleto = `${nombre} ${apellido}`.trim() || 'Sin nombre';
+      const planTexto = planLabel || plan || 'No seleccionado';
+      const precioTexto = price ? '$' + price + ' MXN' : 'N/A';
+      const subject = `\u{1F195} NUEVO LEAD \u2014 DERM\u00C1TIKA #${folio} \u2014 ${nombreCompleto}`;
+
+      const emailText = [
+        '\u{1F195} NUEVO LEAD \u2014 EVALUACI\u00D3N COMPLETADA',
+        `Folio: ${folio}`,
+        `Paciente: ${nombreCompleto}`,
+        `Correo: ${correo || 'N/A'}`,
+        `WhatsApp: ${whatsapp || 'N/A'}`,
+        `Edad: ${edad || 'N/A'}`,
+        `Peso: ${peso ? peso + ' kg' : 'N/A'}`,
+        `Sexo: ${sexo || 'N/A'}`,
+        `Plan recomendado: ${planTexto}`,
+        `Medicamento: ${medication || 'N/A'}`,
+        `Precio: ${precioTexto}`,
+        'Estado de pago: PENDIENTE',
+        `Fecha: ${nowIso}`,
+        '',
+        'El PDF adjunto contiene la evaluaci\u00F3n m\u00E9dica completa + fotos del paciente.',
+        'Si no paga en los pr\u00F3ximos d\u00EDas, da seguimiento por WhatsApp o correo.',
+        '',
+        'DERM\u00C1TIKA \u2014 dermatika.mx'
+      ].join('\n');
+
+      const emailHTML = buildEmailHTML({
+        ...payload,
+        eligibility_status: 'candidato',
+        payment_status: 'pendiente'
+      });
+
+      await sendInternalMail(subject, emailText, allAttachments, emailHTML);
+      console.log('[INTAKE] \u2705 Correo de lead enviado. Folio:', folio, '| fotos:', photoAttachments.length);
+    } catch (mailErr) {
+      console.error('[INTAKE] \u274C Error enviando correo de lead:', mailErr.message || mailErr);
+    }
+  });
 
   return res.json({ ok: true, folio, status, recommendedPlan: plan || null });
 });
