@@ -1,5 +1,5 @@
 'use strict';
-console.log("VERSION SERVER LEAD EMAIL 30-MAYO-03:00");
+console.log("VERSION SERVER AIRTABLE FLOW 30-MAYO-06:00");
 
 const express  = require('express');
 const fs       = require('fs');
@@ -421,7 +421,13 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
   const edadReal = calcularEdad(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate);
   const precioNum = Number(row.price || pa.selectedPrice || 0) || undefined;
 
-  // Solo 14 campos exactos — todos como texto excepto Edad y Precio
+  // Campos Airtable — Estado refleja la fase del funnel
+  const estadoAirtable = (() => {
+    if (row.payment_status === 'paid' || row.status === 'PAGADO') return 'PAGADO';
+    if (row.autosave) return 'LEAD';
+    return 'EVALUACION_COMPLETA';
+  })();
+
   const fields = {
     'Folio':        sv(row.folio),
     'Fecha':        new Date().toISOString().split('T')[0],
@@ -432,8 +438,9 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
     'Peso':         sv(pa.weight || pa.peso),
     'Sexo':         sv(row.sexo  || pa.sexo || pa.sex),
     'Plan':         sv(row.plan),
-    'Fotos':        (row.files && row.files.length > 0) ? 'Fotos enviadas por correo' : 'Sin fotos',
-    'PDF':          'PDF enviado por correo',
+    'Estado':       estadoAirtable,
+    'Fotos':        (row.files && row.files.length > 0) ? 'Si' : 'No',
+    'PDF':          estadoAirtable !== 'LEAD' ? 'Enviado por correo' : '',
   };
 
   // Eliminar vacíos y undefined
@@ -1337,6 +1344,17 @@ app.post('/api/lead-autosave', (req, res) => {
   const db = readDb();
   db.push(payload);
   writeDb(db);
+
+  // FASE 1: solo Airtable, sin correo — evita saturar inbox con contactos tempranos
+  if ((payload.correo || payload.whatsapp) && AIRTABLE_API_KEY && AIRTABLE_BASE_ID) {
+    setImmediate(async () => {
+      try {
+        await saveToAirtableAdmin(payload, null);
+        console.log('[AUTOSAVE] ✅ Airtable LEAD creado. Folio:', payload.folio);
+      } catch(e) { console.error('[AUTOSAVE] ❌ Airtable LEAD:', e.message); }
+    });
+  }
+
   return res.json({ ok: true, saved: true, folio: payload.folio, status: payload.status });
 });
 
@@ -1526,29 +1544,36 @@ app.post('/api/intake', upload.any(), async (req, res) => {
   db.push(payload);
   writeDb(db);
 
-  console.log('[INTAKE] Evaluación guardada — enviando correo de lead a admin. Folio:', folio);
+  console.log('[INTAKE] Evaluacion guardada. Folio:', folio, '| fotos:', fileSummaries.length);
 
-  // Enviar correo de lead INMEDIATAMENTE al guardar la evaluación
-  // Llega aunque el paciente no pague — permite seguimiento por correo/WhatsApp
+  // FASE 2: Airtable actualiza registro + correo con PDF y fotos al admin
   setImmediate(async () => {
+    // 2a. Actualizar Airtable — estado EVALUACION_COMPLETA
+    try {
+      await saveToAirtableAdmin(payload, null);
+      console.log('[INTAKE] ✅ Airtable actualizado. Folio:', folio);
+    } catch(atErr) {
+      console.error('[INTAKE] ❌ Airtable:', atErr.message);
+    }
+
+    // 2b. Correo con PDF + fotos al admin
     try {
       const pdfBuf = await generateEvaluationPDF({ ...payload, eligibility_status: 'candidato' });
       const pdfAttachment = {
-        filename: `DERMATIKA-Lead-${folio}.pdf`,
+        filename: `DERMATIKA-Evaluacion-${folio}.pdf`,
         content: pdfBuf.toString('base64'),
         contentType: 'application/pdf'
       };
-
       const photoAttachments = getPhotoAttachments(payload);
       const allAttachments = [pdfAttachment, ...photoAttachments];
-
       const nombreCompleto = `${nombre} ${apellido}`.trim() || 'Sin nombre';
       const planTexto = planLabel || plan || 'No seleccionado';
-      const precioTexto = price ? '$' + price + ' MXN' : 'N/A';
-      const subject = `\u{1F195} NUEVO LEAD \u2014 DERM\u00C1TIKA #${folio} \u2014 ${nombreCompleto}`;
-
+      const tieneFootos = photoAttachments.length > 0;
+      const subject = tieneFootos
+        ? `[EVALUACION + FOTOS] DERMATIKA #${folio} - ${nombreCompleto}`
+        : `[EVALUACION SIN FOTOS] DERMATIKA #${folio} - ${nombreCompleto}`;
       const emailText = [
-        '\u{1F195} NUEVO LEAD \u2014 EVALUACI\u00D3N COMPLETADA',
+        tieneFootos ? 'EVALUACION COMPLETA CON FOTOS' : 'EVALUACION COMPLETA SIN FOTOS',
         `Folio: ${folio}`,
         `Paciente: ${nombreCompleto}`,
         `Correo: ${correo || 'N/A'}`,
@@ -1556,28 +1581,25 @@ app.post('/api/intake', upload.any(), async (req, res) => {
         `Edad: ${edad || 'N/A'}`,
         `Peso: ${peso ? peso + ' kg' : 'N/A'}`,
         `Sexo: ${sexo || 'N/A'}`,
-        `Plan recomendado: ${planTexto}`,
+        `Plan: ${planTexto}`,
         `Medicamento: ${medication || 'N/A'}`,
-        `Precio: ${precioTexto}`,
-        'Estado de pago: PENDIENTE',
+        `Precio: ${price ? '$' + price + ' MXN' : 'N/A'}`,
+        'Estado: PENDIENTE DE PAGO',
         `Fecha: ${nowIso}`,
         '',
-        'El PDF adjunto contiene la evaluaci\u00F3n m\u00E9dica completa + fotos del paciente.',
-        'Si no paga en los pr\u00F3ximos d\u00EDas, da seguimiento por WhatsApp o correo.',
-        '',
-        'DERM\u00C1TIKA \u2014 dermatika.mx'
+        tieneFootos ? 'PDF + fotos adjuntas.' : 'PDF adjunto. El paciente no subio fotos.',
+        'Ver Airtable para seguimiento.',
+        'DERMATIKA - dermatika.mx'
       ].join('\n');
-
       const emailHTML = buildEmailHTML({
         ...payload,
         eligibility_status: 'candidato',
         payment_status: 'pendiente'
       });
-
       await sendInternalMail(subject, emailText, allAttachments, emailHTML);
-      console.log('[INTAKE] \u2705 Correo de lead enviado. Folio:', folio, '| fotos:', photoAttachments.length);
-    } catch (mailErr) {
-      console.error('[INTAKE] \u274C Error enviando correo de lead:', mailErr.message || mailErr);
+      console.log('[INTAKE] ✅ Correo evaluacion enviado. Folio:', folio, '| fotos:', photoAttachments.length);
+    } catch(mailErr) {
+      console.error('[INTAKE] ❌ Correo evaluacion:', mailErr.message);
     }
   });
 
