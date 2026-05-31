@@ -1,5 +1,5 @@
 'use strict';
-console.log("VERSION SERVER CLEAN 30-MAYO-18:00");
+console.log("VERSION SERVER FULL AIRTABLE 31-MAYO-13:00");
 
 const express  = require('express');
 const fs       = require('fs');
@@ -428,19 +428,60 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
     return 'EVALUACION_COMPLETA';
   })();
 
+  // Helper: join arrays for multilineText
+  const arr = (v) => Array.isArray(v) ? v.join(', ') : sv(v);
+
   const fields = {
+    // ── Identificación ──────────────────────────────────────────────
     'Folio':        sv(row.folio),
     'Fecha':        new Date().toISOString().split('T')[0],
-    'Nombre':       (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.nombre),
+    'Nombre':       (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.fullName || pa.nombre),
     'Telefono':     sv(row.whatsapp || pa.whatsapp || pa.phone),
     'Email':        sv(row.correo   || pa.correo   || pa.email),
     'Edad':         edadReal ? Number(edadReal) : undefined,
     'Peso':         sv(pa.weight || pa.peso),
     'Sexo':         sv(row.sexo  || pa.sexo || pa.sex),
-    'Plan':         sv(row.plan),
-    'Estado':       estadoAirtable,
-    'Fotos':        (row.files && row.files.length > 0) ? 'Si' : 'No',
-    'PDF':          estadoAirtable !== 'LEAD' ? 'Enviado por correo' : '',
+
+    // ── Dirección ───────────────────────────────────────────────────
+    'Fecha nacimiento': sv(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate),
+    'Tipo piel':        sv(pa.skinType || pa.tipoPiel),
+    'Direccion completa': sv(pa.address || pa.calle ? `${sv(pa.calle)} ${sv(pa.numExt || '')} ${sv(pa.numInt || '')}`.trim() : ''),
+    'Codigo postal':    pa.cp ? Number(pa.cp) : undefined,
+    'Colonia':          sv(pa.colonia),
+    'Municipio':        sv(pa.municipio || pa.alcaldia),
+    'Ciudad':           sv(pa.ciudad || pa.city),
+
+    // ── Plan ────────────────────────────────────────────────────────
+    'Plan':             sv(row.plan || pa.selectedPlan),
+    'Medicamento':      sv(row.medication || pa.medication),
+    'Precio':           precioNum,
+    'Referencia Stripe': sv(row.payment_reference || paymentIntentId),
+    'Stripe Payment ID': sv(row.stripe_payment_id || paymentIntentId),
+
+    // ── Cuestionario médico — Acné ───────────────────────────────────
+    'Acne severidad':   sv(pa.acneSeverity || pa.acne_severity),
+    'Tiempo con acne':  sv(pa.duration || pa.tiempoAcne),
+    'Zonas afectadas':  Array.isArray(pa.acneAreas) ? pa.acneAreas : (pa.acneAreas ? [pa.acneAreas] : undefined),
+    'Tipo de lesiones': arr(pa.acneType || pa.tipoLesiones),
+    'Dolor':            sv(pa.acnePain || pa.dolor),
+    'Impacto emocional': sv(pa.emotionalImpact || pa.impactoEmocional),
+
+    // ── Historial de tratamientos ────────────────────────────────────
+    'Tratamientos previos':      arr(pa.previousTreatments || pa.tratamientosPrevios),
+    'Respuesta a tratamientos':  sv(pa.treatmentResponse || pa.respuestaTratamientos),
+
+    // ── Salud general ────────────────────────────────────────────────
+    'Salud general':       sv(pa.generalHealth || pa.saludGeneral),
+    'Medicamentos actuales': sv(pa.currentMedications || pa.medicamentosActuales),
+    'Alergias':            sv(pa.allergies || pa.alergias),
+    'Embarazo / lactancia': sv(pa.pregnancy || pa.embarazo),
+    'Anticoncepcion':      sv(pa.contraception || pa.anticonceptivos),
+
+    // ── Estado y control ─────────────────────────────────────────────
+    'Estado':             estadoAirtable,
+    'Estado de pago':     estadoAirtable === 'PAGADO' ? 'Pagado' : 'Pendiente',
+    'Fotos':              (row.files && row.files.length > 0) ? 'Si' : 'No',
+    'PDF':                estadoAirtable !== 'LEAD' ? 'Enviado por correo' : '',
   };
 
   // Eliminar vacíos y undefined
