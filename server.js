@@ -427,6 +427,20 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
 
   // Helper: join arrays for multilineText
   const arr = (v) => Array.isArray(v) ? v.join(', ') : sv(v);
+  const ship = row.shipping || {};
+  const pick = (...vals) => {
+    for (const val of vals) {
+      if (Array.isArray(val) && val.length) return val;
+      const clean = sv(val);
+      if (clean) return val;
+    }
+    return undefined;
+  };
+  const answerSummary = Object.entries(pa || {})
+    .filter(([k, v]) => v !== undefined && v !== null && v !== '' && k !== 'photosBase64')
+    .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : String(v)}`)
+    .join('\n')
+    .slice(0, 9000);
 
   const fields = {
     // ── Identificación ──────────────────────────────────────────────
@@ -442,11 +456,15 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
     // ── Dirección ───────────────────────────────────────────────────
     'Fecha nacimiento': sv(row.fechaNacimiento || pa.fechaNacimiento || pa.birthdate),
     'Tipo piel':        sv(pa.skinType || pa.tipoPiel),
-    'Direccion completa': sv(pa.address || pa.calle ? `${sv(pa.calle)} ${sv(pa.numExt || '')} ${sv(pa.numInt || '')}`.trim() : ''),
-    'Codigo postal':    pa.cp ? Number(pa.cp) : undefined,
-    'Colonia':          sv(pa.colonia),
-    'Municipio':        sv(pa.municipio || pa.alcaldia),
-    'Ciudad':           sv(pa.ciudad || pa.city),
+    'Direccion completa': sv(pick(
+      ship.shipAddress1 && `${sv(ship.shipAddress1)} ${sv(ship.shipExterior)} ${sv(ship.shipAddress2)}`.trim(),
+      pa.shipAddress1 && `${sv(pa.shipAddress1)} ${sv(pa.shipExterior)} ${sv(pa.shipAddress2)}`.trim(),
+      pa.address || pa.calle ? `${sv(pa.calle || pa.address)} ${sv(pa.numExt || '')} ${sv(pa.numInt || '')}`.trim() : ''
+    )),
+    'Codigo postal':    Number(pick(ship.shipZip, pa.shipZip, pa.shippingPostalCode, pa.cp)) || undefined,
+    'Colonia':          sv(pick(ship.shipNeighborhoodManual, ship.shipNeighborhood, pa.shipNeighborhoodManual, pa.shipNeighborhood, pa.shippingNeighborhood, pa.colonia)),
+    'Municipio':        sv(pick(ship.shipMunicipality, pa.shipMunicipality, pa.shippingMunicipality, pa.municipio, pa.alcaldia)),
+    'Ciudad':           sv(pick(ship.shipCity, pa.shipCity, pa.ciudad, pa.city)),
 
     // ── Plan ────────────────────────────────────────────────────────
     'Plan':             sv(row.plan || pa.selectedPlan),
@@ -461,18 +479,44 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
     'Zonas afectadas':  Array.isArray(pa.acneAreas) ? pa.acneAreas : (pa.acneAreas ? [pa.acneAreas] : undefined),
     'Tipo de lesiones': arr(pa.acneType || pa.tipoLesiones),
     'Dolor':            sv(pa.acnePain || pa.dolor),
-    'Impacto emocional': sv(pa.emotionalImpact || pa.impactoEmocional),
+    'Impacto emocional': sv(pa.acnePsychological || pa.emotionalImpact || pa.impactoEmocional),
+    'Empeoramiento acne': sv(pa.acneWorsening),
+    'Detonantes acne':   arr(pa.acneTriggers),
 
     // ── Historial de tratamientos ────────────────────────────────────
     'Tratamientos previos':      arr(pa.previousTreatments || pa.tratamientosPrevios),
     'Respuesta a tratamientos':  sv(pa.treatmentResponse || pa.respuestaTratamientos),
+    'Antibioticos':              sv(pa.antibioticDuration),
+    'Isotretinoina previa':      sv(pa.isotretinoinBefore),
+    'Motivo suspension isotretinoina': sv(pa.isotretinoinSuspensionReason),
+    'Efectos isotretinoina':     arr(pa.isotretinoinSideEffects),
 
     // ── Salud general ────────────────────────────────────────────────
     'Salud general':       sv(pa.generalHealth || pa.saludGeneral),
+    'Condiciones cronicas': arr(pa.chronicConditions),
     'Medicamentos actuales': sv(pa.currentMedications || pa.medicamentosActuales),
+    'Detalle medicamentos actuales': sv(pa.currentMedicationsDetail),
+    'Vitamina A':          sv(pa.vitaminA),
+    'Tetraciclinas':       sv(pa.tetracyclines),
+    'Higado':              sv(pa.liverCondition),
+    'Colesterol trigliceridos': sv(pa.lipidProfile),
+    'Rinon':               sv(pa.kidneyCondition),
     'Alergias':            sv(pa.allergies || pa.alergias),
-    'Embarazo / lactancia': sv(pa.pregnancy || pa.embarazo),
+    'Detalle alergias':    sv(pa.allergiesDetail),
+    'Cirugia reciente':    sv(pa.recentSurgery),
+    'Salud mental':        arr(pa.mentalHealth),
+    'Ideas suicidas':      sv(pa.suicidalIdeation),
+    'Medicamentos salud mental': sv(pa.mentalHealthMeds),
+    'Detalle medicamentos salud mental': sv(pa.mentalHealthMedsDetail),
+    'Embarazo / lactancia': sv([pa.pregnancyStatus, pa.breastfeeding].filter(Boolean).join(' / ') || pa.pregnancy || pa.embarazo),
     'Anticoncepcion':      sv(pa.contraception || pa.anticonceptivos),
+    'Prueba embarazo':     sv(pa.pregnancyTestDone),
+    'Consentimiento embarazo': sv(pa.pregnancyConsent),
+    'Alcohol':             sv(pa.alcoholConsumption),
+    'Exposicion solar':    sv(pa.sunExposure),
+    'Donacion sangre':     sv(pa.bloodDonation),
+    'Lentes contacto':     sv(pa.contactLenses),
+    'Resumen cuestionario': answerSummary,
 
     // ── Estado y control ─────────────────────────────────────────────
     'Estado':             estadoAirtable,
@@ -492,7 +536,15 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
   const SAFE_AS_TEXT = ['Anticoncepcion', 'Embarazo / lactancia', 'Salud general',
     'Acne severidad', 'Tiempo con acne', 'Tipo de lesiones', 'Dolor',
     'Impacto emocional', 'Tratamientos previos', 'Respuesta a tratamientos',
-    'Medicamentos actuales', 'Alergias', 'Tipo piel'];
+    'Medicamentos actuales', 'Alergias', 'Tipo piel', 'Empeoramiento acne',
+    'Detonantes acne', 'Antibioticos', 'Isotretinoina previa',
+    'Motivo suspension isotretinoina', 'Efectos isotretinoina',
+    'Condiciones cronicas', 'Detalle medicamentos actuales', 'Vitamina A',
+    'Tetraciclinas', 'Higado', 'Colesterol trigliceridos', 'Rinon',
+    'Detalle alergias', 'Cirugia reciente', 'Salud mental', 'Ideas suicidas',
+    'Medicamentos salud mental', 'Detalle medicamentos salud mental',
+    'Prueba embarazo', 'Consentimiento embarazo', 'Alcohol', 'Exposicion solar',
+    'Donacion sangre', 'Lentes contacto', 'Resumen cuestionario'];
   SAFE_AS_TEXT.forEach(k => {
     if (fields[k] !== undefined) {
       fields[k] = Array.isArray(fields[k]) ? fields[k].join(', ') : String(fields[k]);
@@ -504,14 +556,24 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
 
   try {
     const existingId = await _findAirtableRecord(AIRTABLE_TABLE_ADMIN, sv(row.folio));
-    const result = existingId
-      ? await _airtableRequest('PATCH', AIRTABLE_TABLE_ADMIN, existingId, { fields, typecast: true })
-      : await _airtableRequest('POST',  AIRTABLE_TABLE_ADMIN, null,       { fields, typecast: true });
+    let fieldsToSend = { ...fields };
+    let result = null;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      result = existingId
+        ? await _airtableRequest('PATCH', AIRTABLE_TABLE_ADMIN, existingId, { fields: fieldsToSend, typecast: true })
+        : await _airtableRequest('POST',  AIRTABLE_TABLE_ADMIN, null,       { fields: fieldsToSend, typecast: true });
+      if (result.ok) break;
+      const errMsg = result.data?.error?.message || '';
+      const unknownField = errMsg.match(/Unknown field name:\s*"?([^"]+)"?/i)?.[1];
+      if (!unknownField || !Object.prototype.hasOwnProperty.call(fieldsToSend, unknownField)) break;
+      console.warn('[AIRTABLE] Campo no existe, se omite y reintenta:', unknownField);
+      delete fieldsToSend[unknownField];
+    }
 
     if (!result.ok) {
       const errMsg = result.data?.error?.message || result.data?.error?.type || JSON.stringify(result.data?.error || result.data);
       console.error('[AIRTABLE ERROR]', result.status, errMsg);
-      console.error('[AIRTABLE ERROR] Campos enviados:', Object.keys(fields).join(', '));
+      console.error('[AIRTABLE ERROR] Campos enviados:', Object.keys(fieldsToSend).join(', '));
       return false;
     }
     const rid = result.data.id || existingId;
