@@ -1,5 +1,5 @@
 'use strict';
-console.log("VERSION SERVER FINAL 30-MAYO-17:00");
+console.log("VERSION SERVER CLEAN 30-MAYO-18:00");
 
 const express  = require('express');
 const fs       = require('fs');
@@ -1345,13 +1345,16 @@ app.post('/api/lead-autosave', (req, res) => {
   db.push(payload);
   writeDb(db);
 
-  // FASE 1: solo Airtable, sin correo
+  // FASE 1: Airtable sin correo
+  // lead_contacto = solo nombre+contacto (LEAD)
+  // evaluacion_completa = cuestionario+fotos completo (sin plan ni dirección)
+  const paymentStatusAutosave = sanitizeText(body.payment_status || '', 40);
   if ((payload.correo || payload.whatsapp) && AIRTABLE_API_KEY && AIRTABLE_BASE_ID) {
     setImmediate(async () => {
       try {
         await saveToAirtableAdmin(payload, null);
-        console.log('[AUTOSAVE] \u2705 Airtable LEAD creado/actualizado. Folio:', payload.folio);
-      } catch(e) { console.error('[AUTOSAVE] \u274C Airtable LEAD:', e.message); }
+        console.log('[AUTOSAVE] \u2705 Airtable', paymentStatusAutosave, 'Folio:', payload.folio);
+      } catch(e) { console.error('[AUTOSAVE] \u274C Airtable:', e.message); }
     });
   }
 
@@ -1359,6 +1362,44 @@ app.post('/api/lead-autosave', (req, res) => {
 });
 
 // Intake principal con fotos
+// Validación de foto con IA — llamado desde el frontend
+app.post('/api/validate-photo', express.json(), async (req, res) => {
+  const { image, mediaType } = req.body || {};
+  if (!image) return res.json({ valid: true });
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY || '',
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 20,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: image } },
+            { type: 'text', text: '\u00bfEsta imagen muestra piel humana con acn\u00e9, espinillas, granitos, manchas o alguna condici\u00f3n dermatol\u00f3gica de la piel? Responde SOLO con: SI o NO.' }
+          ]
+        }]
+      })
+    });
+
+    if (!response.ok) return res.json({ valid: true });
+    const data = await response.json();
+    const answer = (data?.content?.[0]?.text || '').trim().toUpperCase();
+    const valid = answer.startsWith('SI') || answer.startsWith('S\u00cd');
+    console.log('[VALIDATE-PHOTO] Resultado:', valid ? 'PIEL OK' : 'NO ES PIEL');
+    return res.json({ valid });
+  } catch (err) {
+    console.error('[VALIDATE-PHOTO] Error:', err.message);
+    return res.json({ valid: true }); // Si falla, dejar pasar
+  }
+});
+
 app.post('/api/intake', upload.any(), async (req, res) => {
   console.log('[INTAKE] ← Recibido desde:', req.headers.origin || 'origen desconocido');
   const bodyKeys = Object.keys(req.body || {});
