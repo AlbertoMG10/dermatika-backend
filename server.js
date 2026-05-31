@@ -1,5 +1,5 @@
 'use strict';
-console.log("VERSION SERVER FULL AIRTABLE 31-MAYO-13:00");
+console.log("VERSION SERVER AIRTABLE 422FIX 31-MAYO-14:00");
 
 const express  = require('express');
 const fs       = require('fs');
@@ -488,6 +488,18 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
   Object.keys(fields).forEach(k => {
     const v = fields[k];
     if (v === undefined || v === null || v === '') delete fields[k];
+  });
+
+  // Convertir arrays a strings para campos que podrían ser singleSelect en Airtable
+  // Evita error 422 "Insufficient permissions to create new select option"
+  const SAFE_AS_TEXT = ['Anticoncepcion', 'Embarazo / lactancia', 'Salud general',
+    'Acne severidad', 'Tiempo con acne', 'Tipo de lesiones', 'Dolor',
+    'Impacto emocional', 'Tratamientos previos', 'Respuesta a tratamientos',
+    'Medicamentos actuales', 'Alergias', 'Tipo piel'];
+  SAFE_AS_TEXT.forEach(k => {
+    if (fields[k] !== undefined) {
+      fields[k] = Array.isArray(fields[k]) ? fields[k].join(', ') : String(fields[k]);
+    }
   });
 
   console.log('[AIRTABLE] Guardando en CRM ADMIN — folio:', sv(row.folio),
