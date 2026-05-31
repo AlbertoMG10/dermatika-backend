@@ -333,9 +333,6 @@ async function _airtableRequest(method, tableName, recordId, body) {
   const base = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(tableName)}`;
   const url  = recordId ? `${base}/${recordId}` : base;
   const payload = body ? { ...body } : undefined;
-  if (payload && Object.prototype.hasOwnProperty.call(payload, 'typecast')) {
-    delete payload.typecast;
-  }
   const res  = await fetch(url, {
     method,
     headers: {
@@ -508,8 +505,8 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
   try {
     const existingId = await _findAirtableRecord(AIRTABLE_TABLE_ADMIN, sv(row.folio));
     const result = existingId
-      ? await _airtableRequest('PATCH', AIRTABLE_TABLE_ADMIN, existingId, { fields })
-      : await _airtableRequest('POST',  AIRTABLE_TABLE_ADMIN, null,       { fields });
+      ? await _airtableRequest('PATCH', AIRTABLE_TABLE_ADMIN, existingId, { fields, typecast: true })
+      : await _airtableRequest('POST',  AIRTABLE_TABLE_ADMIN, null,       { fields, typecast: true });
 
     if (!result.ok) {
       const errMsg = result.data?.error?.message || result.data?.error?.type || JSON.stringify(result.data?.error || result.data);
