@@ -325,7 +325,7 @@ const MAIL_FROM = 'DERMATIKA <no-reply@dermatika.mx>';
 // ══════════════════════════════════════════════════════════════════
 const AIRTABLE_API_KEY      = process.env.AIRTABLE_API_KEY      || '';
 const AIRTABLE_BASE_ID      = process.env.AIRTABLE_BASE_ID      || '';
-const AIRTABLE_TABLE_ADMIN  = process.env.AIRTABLE_TABLE_ADMIN  || process.env.AIRTABLE_TABLE || 'CRM ADMIN';
+const AIRTABLE_TABLE_ADMIN  = process.env.AIRTABLE_TABLE_ADMIN  || process.env.AIRTABLE_TABLE || 'CRM DERMATIKA';
 const AIRTABLE_FIELD_CIUDAD = 'Ciudad';
 
 // Helper interno para llamadas a la API de Airtable
