@@ -449,7 +449,7 @@ async function saveToAirtableAdmin(row, paymentIntentId) {
     'Nombre':       (`${sv(row.nombre)} ${sv(row.apellido)}`).trim() || sv(pa.fullName || pa.nombre),
     'Telefono':     sv(row.whatsapp || pa.whatsapp || pa.phone),
     'Email':        sv(row.correo   || pa.correo   || pa.email),
-    'Edad':         edadReal ? Number(edadReal) : undefined,
+    'Edad':         edadReal ? Number(edadReal) : (pa.age ? Number(pa.age) : undefined),
     'Peso':         sv(pa.weight || pa.peso),
     'Sexo':         sv(row.sexo  || pa.sexo || pa.sex),
 
