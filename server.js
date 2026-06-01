@@ -99,7 +99,7 @@ const ALLOWED_ORIGINS = new Set(
 app.use((req, res, next) => {
   const origin = req.headers.origin || '';
   // Permitir siempre dermatika.mx aunque no esté en las vars de entorno
-  if (ALLOWED_ORIGINS.has(origin) || origin.endsWith('.dermatika.mx') || origin.endsWith('.netlify.app')) {
+  if (origin === 'null' || ALLOWED_ORIGINS.has(origin) || origin.endsWith('.dermatika.mx') || origin.endsWith('.netlify.app')) {
     res.header('Access-Control-Allow-Origin', origin);
   }
   res.header('Vary', 'Origin');
